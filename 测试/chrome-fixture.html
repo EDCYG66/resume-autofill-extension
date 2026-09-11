@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<body>
+  <form id="resume-fixture">
+    <label for="full-name">姓名</label><input id="full-name" name="fullName">
+    <fieldset><legend>性别</legend><label><input id="gender-female" type="radio" name="gender" value="女">女</label><label><input id="gender-male" type="radio" name="gender" value="男">男</label></fieldset>
+    <label for="phone">联系电话</label><input id="phone" name="phone">
+    <label for="school">毕业院校</label><input id="school" name="school">
+    <label for="degree">学历</label><select id="degree" name="degree"><option>请选择</option><option>硕士</option><option>本科</option></select>
+    <label for="study-mode">学习形式</label><select id="study-mode" name="studyMode"><option>请选择</option><option>全日制</option><option>非全日制</option></select>
+    <label for="role">期望职位</label><input id="role" name="targetRole">
+    <div class="ant-form-item">
+      <div class="ant-form-item-label"><label>可实习时间</label></div>
+      <div class="ant-form-item-control">
+        <label><input id="day-mon" type="checkbox" name="days" value="周一">周一</label>
+        <label><input id="day-tue" type="checkbox" name="days" value="周二" checked>周二</label>
+        <label><input id="day-wed" type="checkbox" name="days" value="周三">周三</label>
+      </div>
+    </div>
+    <label><input id="adjust" type="checkbox" name="adjust">服从调剂</label>
+    <label><input id="reject" type="checkbox" name="reject" checked>不同意调剂</label>
+    <label for="statement">个人自述</label><input id="statement" name="statement">
+    <label for="job-code">岗位编号</label><input id="job-code" name="jobCode" value="R-001">
+    <label for="captcha">短信验证码</label><input id="captcha" name="captcha" value="1234">
+    <button type="submit">提交申请</button>
+  </form>
+  <pre id="result"></pre>
+  <script src="../content.js"></script>
+  <script>
+    window.submitAttempts = 0;
+    document.querySelector('form').addEventListener('submit', function (event) {
+      event.preventDefault();
+      window.submitAttempts += 1;
+    });
+    var profile = {
+      basic: { name: '测试姓名', gender: '男', phone: '13800138000' },
+      intention: { target_role: '测试工程师' },
+      education: [{ school: '测试大学', level: '硕士', study_mode: '全日制' }],
+      custom_fields: [
+        { key: 'intern_days', label: '可实习时间', value: '周一、周三' },
+        { key: 'adjust', label: '服从调剂', value: '是' },
+        { key: 'reject', label: '不同意调剂', value: '否' }
+      ]
+    };
+    var allCandidates = ResumeContent.scan(profile, { siteKey: 'file://fixture' });
+    var candidates = allCandidates.filter(function (candidate) { return candidate.proposedValue && !candidate.isNewField; });
+    var newField = allCandidates.find(function (candidate) { return candidate.label === '岗位编号'; });
+    var sensitiveField = allCandidates.find(function (candidate) { return candidate.label === '短信验证码'; });
+    var daysField = allCandidates.find(function (candidate) { return candidate.label === '可实习时间'; });
+    newField.remember = true; newField.profileKey = 'custom_fields.1';
+    var draftCandidates = ResumeContent.collectDraftValues([newField, { remember: true, sensitive: sensitiveField.sensitive, siteKey: 'file://fixture', fingerprint: sensitiveField.fingerprint, profileKey: 'custom_fields.2', proposedValue: sensitiveField.proposedValue }]);
+    var fillResults = ResumeContent.fill(candidates);
+    // Learning loop: a wording no alias table knows about, then the same wording after the
+    // user has confirmed it once. The second scan must recognise it without any code change.
+    var learnBefore = ResumeContent.scan({ self_evaluation: '一段评价' }, { siteKey: 'file://fixture' })
+      .find(function (item) { return item.label === '个人自述'; });
+    var learnAfter = ResumeContent.scan({
+      self_evaluation: '一段评价',
+      label_mappings: [{ label: '个人自述', profile_key: 'self_evaluation' }]
+    }, { siteKey: 'file://fixture' }).find(function (item) { return item.label === '个人自述'; });
+    document.querySelector('#result').textContent = JSON.stringify({
+      candidates: candidates.length,
+      discoveredNewField: Boolean(newField && newField.isNewField),
+      discoveredNewFieldDraft: draftCandidates.length,
+      sensitiveDraftBlocked: sensitiveField.sensitive && draftCandidates.every(function (draft) { return draft.fingerprint !== sensitiveField.fingerprint; }),
+      daysProposal: daysField ? daysField.proposedValue : null,
+      daysConfidence: daysField ? daysField.confidence : null,
+      fillResults: fillResults,
+      learnBefore: learnBefore ? { isNewField: learnBefore.isNewField, confidence: learnBefore.confidence } : null,
+      learnAfter: learnAfter ? { profileKey: learnAfter.profileKey, confidence: learnAfter.confidence, proposedValue: learnAfter.proposedValue } : null,
+      state: {
+        name: document.querySelector('#full-name').value,
+        gender: document.querySelector('#gender-male').checked ? '男' : '女',
+        phone: document.querySelector('#phone').value,
+        school: document.querySelector('#school').value,
+        degree: document.querySelector('#degree').value,
+        studyMode: document.querySelector('#study-mode').value,
+        role: document.querySelector('#role').value,
+        dayMon: document.querySelector('#day-mon').checked,
+        dayTue: document.querySelector('#day-tue').checked,
+        dayWed: document.querySelector('#day-wed').checked,
+        adjust: document.querySelector('#adjust').checked,
+        reject: document.querySelector('#reject').checked,
+        submitAttempts: window.submitAttempts
+      }
+    });
+  </script>
+</body>
+</html>

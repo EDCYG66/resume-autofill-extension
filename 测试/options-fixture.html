@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><link rel="stylesheet" href="../tokens.css"><link rel="stylesheet" href="../options.css"></head>
+<body>
+  <div class="app" id="app">
+    <nav id="tabs" class="nav-items" role="tablist" aria-label="资料分类"></nav>
+    <div class="content">
+      <header class="page-header"><div class="page-heading"><p class="eyebrow">LOCAL PROFILE</p><h1>简历资料编辑器</h1><p class="lead">测试夹具</p></div><div class="actions"><button id="importButton" type="button">导入模板</button><button id="exportButton" type="button">导出模板</button><button id="saveButton" class="primary" type="button">保存资料</button><input id="fileInput" type="file" hidden></div></header>
+      <section id="editor" class="editor"></section><div id="status" class="status"></div>
+    </div>
+  </div>
+  <pre id="smoke-result"></pre>
+  <script>window.__errors = []; window.addEventListener('error', function (event) { window.__errors.push(String(event.error && event.error.stack || event.message)); }); window.addEventListener('unhandledrejection', function (event) { window.__errors.push(String(event.reason && event.reason.stack || event.reason)); });</script>
+  <script>
+    window.__saved = null;
+    window.chrome = { storage: { local: {
+      get: function (defaults, callback) { callback({ resumeProfile: { basic: null, intention: null, education: [{ school: '示例大学', start_date: '2024-09', end_date: '2027-06', level: '硕士' }], employment: [], projects: [], honors: [], activities: [], campus_roles: [], skills: [], self_evaluation: '', application_answers: [], custom_fields: [{ key: 'job_code', label: '岗位编号', category: '求职意向', value: 'R-001', aliases: ['职位编号'], field_type: 'text' }], site_mappings: [{ site_key: 'https://example.com', fingerprint: 'text:jobcode', profile_key: 'custom_fields.1', label: '岗位编号', confirmed: 'true' }], site_drafts: [{ site_key: 'https://example.com', fingerprint: 'text:jobcode', profile_key: 'custom_fields.1', value: 'R-001' }] } }); },
+      set: function (value, callback) { window.__saved = value; if (callback) callback(); }
+    } }, runtime: { openOptionsPage: function () {} } };
+  </script>
+  <script src="../profile-parser.js"></script>
+  <script src="../options.js"></script>
+  <script>
+    setTimeout(function () {
+      var tabs = function () { return Array.prototype.slice.call(document.querySelectorAll('#tabs button')); };
+      var tabNamed = function (name) { return tabs().find(function (button) { return button.textContent === name; }); };
+
+      // Phase 1: the custom fields tab, asserted while it is the active section.
+      var customTab = tabNamed('我加的项');
+      if (customTab) customTab.click();
+      var customKeyPresent = document.querySelector('#field-custom_fields-0-key');
+      var snapshot = {
+        tabCount: tabs().length,
+        hasCustomTab: Boolean(customTab),
+        hasAdditionalTab: Boolean(tabNamed('附加信息')),
+        hasCustomKey: Boolean(customKeyPresent) && customKeyPresent.value === 'job_code',
+        hasSiteMemory: document.body.innerText.indexOf('https://example.com') >= 0,
+        hasAttachmentTab: document.body.innerText.indexOf('附件') >= 0,
+        hasEditorContent: document.querySelector('#editor').innerText.length > 0
+      };
+
+      // Phase 2: the education tab, for the flexible date fields.
+      var educationTab = tabNamed('教育经历');
+      if (educationTab) educationTab.click();
+      var startField = document.querySelector('#field-education-0-start_date');
+      snapshot.startDateInputType = startField ? startField.type : null;
+      snapshot.monthOnlyPreserved = startField ? startField.value === '2024-09' : false;
+
+      // A day-precision value typed with a sloppy separator should normalise on change.
+      if (startField) {
+        startField.value = '2024/9/18';
+        startField.dispatchEvent(new Event('input', { bubbles: true }));
+        startField.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      snapshot.dayPrecisionValue = startField ? startField.value : null;
+
+      // A malformed value must be flagged instead of being saved silently.
+      if (startField) {
+        startField.value = '2024年9月';
+        startField.dispatchEvent(new Event('input', { bubbles: true }));
+        snapshot.invalidFormatFlagged = startField.classList.contains('is-invalid');
+      }
+
+      snapshot.errors = window.__errors;
+      document.querySelector('#smoke-result').textContent = JSON.stringify(snapshot);
+    }, 0);
+  </script>
+</body>
+</html>

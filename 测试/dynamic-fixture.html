@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+<body>
+<form id="resume-form">
+  <aside><nav><div>应聘渠道</div><div>个人基本信息</div><div>求职意向</div><div>教育经历</div><div>英语能力</div><div>其他外语能力</div><div>计算机技能</div><div>专业技能</div><div>实习经历</div><div>自我评价</div></nav></aside>
+  <section class="resume-section" data-section="self-evaluation"><h2>自我评价</h2><div class="field-card"><label for="evaluation">评价内容</label><textarea id="evaluation" name="evaluation" placeholder="请填写评价内容"></textarea></div></section>
+  <section class="resume-section" data-section="english"><h2>英语能力 <em>必填</em></h2><div class="field-card"><label for="english-certificate">英语证书名称*</label><div id="english-certificate" role="combobox" aria-haspopup="listbox" tabindex="0" class="el-select"><span class="placeholder">请选择英语证书名称</span></div><div role="listbox" hidden><div role="option">大学英语四级</div><div role="option">大学英语六级</div></div></div></section>
+  <section class="resume-section" data-section="other-language"><h2>其他外语能力</h2><button type="button">添加新的其他外语能力</button></section>
+  <section class="resume-section" data-section="computer"><h2>计算机技能</h2><div class="field-card"><label for="computer-certificate">证书名称</label><div id="computer-certificate" role="combobox" aria-haspopup="listbox" tabindex="0" class="el-select"><span class="placeholder">请选择证书名称</span></div><div role="listbox" hidden><div role="option">全国计算机等级考试</div><div role="option">其他</div></div></div></section>
+  <button type="submit">保存并下一步</button>
+</form>
+<pre id="output"></pre>
+  <script src="../content.js"></script>
+<script>
+  window.submitAttempts = 0;
+  document.querySelector('#resume-form').addEventListener('submit', function (event) { event.preventDefault(); window.submitAttempts += 1; });
+  window.__opened = 0;
+  document.querySelectorAll('[role="combobox"]').forEach(function (control) {
+    control.addEventListener('click', function () { window.__opened += 1; var list = control.nextElementSibling; if (list) list.hidden = false; });
+  });
+  var profile = { basic: { name: '测试姓名', phone: '13800138000', email: 'example@example.com' }, intention: { target_role: '电气工程师' }, self_evaluation: '测试自我评价文本', skills: [{ category: '英语', name: '大学英语四级、六级', level: '已通过' }, { category: '编程与算法', name: 'Python', level: '熟悉' }] };
+  try {
+    var candidates = ResumeContent.scan(profile, { siteKey: 'https://recruit.example.com' });
+    var summary = candidates.map(function (item) { return { label: item.label, key: item.profileKey, proposed: item.proposedValue, isNew: item.isNewField, confidence: item.confidence, type: item.controlType }; });
+    var selected = candidates.filter(function (item) { return item.proposedValue && !item.isNewField && item.controlType !== 'div'; });
+    var dynamicSelected = candidates.filter(function (item) { return item.proposedValue && !item.isNewField && item.controlType === 'div'; });
+    var fillPromise = ResumeContent.fill(selected.concat(dynamicSelected));
+    document.querySelector('#output').textContent = JSON.stringify({ summary: summary, state: { evaluation: document.querySelector('#evaluation').value, englishOpen: window.__opened, submitAttempts: window.submitAttempts }, pendingFill: Boolean(fillPromise && fillPromise.then) });
+    setTimeout(function () { fillPromise.then(function (results) { document.querySelector('#output').textContent = JSON.stringify({ summary: summary, results: results, state: { evaluation: document.querySelector('#evaluation').value, englishOpen: window.__opened, submitAttempts: window.submitAttempts } }); }); }, 1000);
+  } catch (error) {
+    document.querySelector('#output').textContent = JSON.stringify({ error: String(error && error.stack || error), state: { evaluation: document.querySelector('#evaluation').value, englishOpen: window.__opened, submitAttempts: window.submitAttempts } });
+  }
+</script>
+</body>
+</html>

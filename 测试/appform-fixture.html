@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+<body>
+  <form id="appform-fixture">
+    <label for="g-site">面试站点</label><input id="g-site" name="interviewSite">
+    <label for="g-name">姓名</label><input id="g-name" name="name">
+    <label for="g-birth">出生日期</label><input id="g-birth" name="birthDate">
+    <label for="g-phone">手机号</label><input id="g-phone" name="mobile">
+    <label for="g-qq">QQ</label><input id="g-qq" name="qq">
+    <label for="g-height">净身高(cm)</label><input id="g-height" name="height">
+    <label for="g-weight">体重(kg)</label><input id="g-weight" name="weight">
+    <label for="g-emerg">紧急联系人</label><input id="g-emerg" name="emergencyContact">
+    <label for="g-school">毕业学校</label><input id="g-school" name="school">
+    <label for="g-major">专业名称</label><input id="g-major" name="major">
+    <label for="g-second">第二专业</label><input id="g-second" name="secondMajor">
+    <label for="g-hobby">兴趣爱好</label><input id="g-hobby" name="hobbies">
+    <label for="g-specialty">特长</label><input id="g-specialty" name="specialty">
+    <label for="g-honor">荣誉名称</label><input id="g-honor" name="honorName">
+    <label for="g-project">项目名称</label><input id="g-project" name="projectName">
+    <button type="submit">保存并下一步</button>
+  </form>
+  <pre id="result"></pre>
+  <script src="../content.js"></script>
+  <script>
+    window.submitAttempts = 0;
+    document.querySelector('#appform-fixture').addEventListener('submit', function (event) {
+      event.preventDefault();
+      window.submitAttempts += 1;
+    });
+    var profile = {
+      basic: { name: '示例姓名', birth_date: '2001-06-03', phone: '13800138000', qq: '123456', height: '178', weight: '75', emergency_contact: '示例联系人' },
+      intention: { interview_site: '示例城市' },
+      education: [{ school: '示例大学', major: '电子信息', second_major: '辅修专业' }],
+      honors: [{ name: '国家励志奖学金一等奖' }],
+      projects: [{ name: '多智能体编队通信' }],
+      additional: { hobbies: '摄影、唱歌', specialty: '乒乓球、合唱' }
+    };
+    var candidates = ResumeContent.scan(profile, { siteKey: 'file://appform' });
+    var fillPromise = ResumeContent.fill(candidates.filter(function (c) { return c.proposedValue && !c.isNewField; }));
+    document.querySelector('#result').textContent = JSON.stringify({
+      cells: candidates.map(function (c) {
+        return { label: c.label, key: c.profileKey, value: c.proposedValue, conf: c.confidence, isNew: c.isNewField };
+      }),
+      state: {
+        site: document.querySelector('#g-site').value,
+        name: document.querySelector('#g-name').value,
+        birth: document.querySelector('#g-birth').value,
+        phone: document.querySelector('#g-phone').value,
+        qq: document.querySelector('#g-qq').value,
+        height: document.querySelector('#g-height').value,
+        weight: document.querySelector('#g-weight').value,
+        emerg: document.querySelector('#g-emerg').value,
+        school: document.querySelector('#g-school').value,
+        major: document.querySelector('#g-major').value,
+        second: document.querySelector('#g-second').value,
+        hobby: document.querySelector('#g-hobby').value,
+        specialty: document.querySelector('#g-specialty').value,
+        honor: document.querySelector('#g-honor').value,
+        project: document.querySelector('#g-project').value,
+        submitAttempts: window.submitAttempts
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<body>
+  <form id="outer-form">
+    <label for="outer-name">姓名</label><input id="outer-name" name="outerName">
+    <iframe id="resume-frame" src="frame-inner.html" width="600" height="200"></iframe>
+    <button type="submit">提交申请</button>
+  </form>
+  <pre id="frame-result"></pre>
+  <script src="../content.js"></script>
+  <script>
+    window.submitAttempts = 0;
+    document.querySelector('#outer-form').addEventListener('submit', function (event) {
+      event.preventDefault();
+      window.submitAttempts += 1;
+    });
+    window.addEventListener('load', function () {
+      var frame = document.querySelector('#resume-frame');
+      var innerDocument = frame.contentDocument;
+      var innerWindow = frame.contentWindow;
+      function innerValue(selector) {
+        var control = innerDocument.querySelector(selector);
+        return control ? control.value : null;
+      }
+      var profile = { basic: { name: '测试姓名', gender: '男' }, education: [{ school: '测试大学', level: '硕士' }] };
+      var allCandidates = ResumeContent.scan(profile, { siteKey: 'file://frame-fixture' });
+      var school = allCandidates.find(function (item) { return item.label === '毕业院校'; });
+      var degree = allCandidates.find(function (item) { return item.label === '学历'; });
+      var unmatched = allCandidates.find(function (item) { return item.label === '岗位编号'; });
+      var selected = allCandidates.filter(function (item) { return item.proposedValue && !item.isNewField; });
+      ResumeContent.fill(selected).then(function (results) {
+        document.querySelector('#frame-result').textContent = JSON.stringify({
+          rootCount: ResumeContent.scanRoots().length,
+          frameFieldFound: Boolean(school && degree),
+          frameFieldKeys: [school && school.profileKey, degree && degree.profileKey],
+          innerSchoolFilled: innerValue('#inner-school'),
+          innerDegreeFilled: innerValue('#inner-degree'),
+          innerGenderFilled: innerDocument.querySelector('#inner-gender-m').checked ? '男' : '女',
+          unmatchedInFrame: Boolean(unmatched && unmatched.isNewField),
+          outerNameFilled: document.querySelector('#outer-name').value,
+          submitAttempts: window.submitAttempts + innerWindow.submitAttempts,
+          filled: results.filter(function (item) { return item.status === 'filled'; }).length
+        });
+      });
+    });
+  </script>
+</body>
+</html>

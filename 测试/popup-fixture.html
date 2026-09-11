@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>popup fixture (generated from popup.html)</title>
+  <link rel="stylesheet" href="../tokens.css">
+  <link rel="stylesheet" href="../popup.css">
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>简历填充助手</h1>
+        <p>点一下才会读这一页，不会替你提交。</p>
+      </div>
+      <button id="openOptions" class="icon-button" type="button" title="打开资料设置" aria-label="打开资料设置">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+          <path d="M3 7h3.4M11.6 7H21"/><circle cx="9" cy="7" r="2.6"/>
+          <path d="M3 12h9.4M17.6 12H21"/><circle cx="15" cy="12" r="2.6"/>
+          <path d="M3 17h2.4M10.6 17H21"/><circle cx="8" cy="17" r="2.6"/>
+        </svg>
+      </button>
+    </header>
+
+    <section class="toolbar" aria-label="资料操作">
+      <button id="importProfile" type="button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 15V4"/><path d="M8.5 7.5 12 4l3.5 3.5"/>
+          <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>
+        </svg>
+        导入资料
+      </button>
+      <button id="exportProfile" type="button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 4v11"/><path d="M8.5 11.5 12 15l3.5-3.5"/>
+          <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>
+        </svg>
+        导出资料
+      </button>
+      <input id="fileInput" type="file" accept=".txt,text/plain" hidden>
+    </section>
+
+    <section class="scan-panel">
+      <button id="scanPage" class="primary" type="button">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+          <circle cx="10.5" cy="10.5" r="6.2"/><path d="M15.2 15.2 20.5 20.5"/>
+        </svg>
+        看看这页要填什么
+      </button>
+      <div id="profileStatus" class="status" role="status" aria-live="polite">正在读取你的资料…</div>
+    </section>
+
+    <section id="review" hidden>
+      <div class="review-heading">
+        <h2>这一页要填的地方</h2>
+        <span id="candidateCount"></span>
+      </div>
+      <div id="candidateList" class="candidate-list"></div>
+      <button id="saveNewFields" type="button">记住这一项</button>
+      <button id="fillConfirmed" class="primary" type="button" disabled>帮我填上</button>
+      <div id="result" class="status" aria-live="polite"></div>
+    </section>
+  </main>
+  <script>
+    var CANDIDATES = [{
+      label: '学习经历', profileKey: null, proposedValue: '', confidence: 'none',
+      currentValue: '', selected: false, isNewField: true, sensitive: false,
+      remember: false, customKey: '', customLabel: '学习经历', customCategory: '自己加的',
+      fingerprint: 'text:studyexp', controlType: 'input', siteKey: 'https://example.com'
+    }];
+    window.__saved = null;
+    window.__filled = null;
+    window.chrome = {
+      runtime: { lastError: null, getManifest: function () { return { version: '0.2.0' }; }, openOptionsPage: function () {} },
+      storage: { local: {
+        get: function (defaults, callback) { callback({ resumeProfile: { education: [{ school: '示例大学', major: '电子信息' }] }, resumeAccent: '#0078d4' }); },
+        set: function (value, callback) { window.__saved = value; if (callback) callback(); }
+      } },
+      tabs: {
+        query: function (query, callback) { callback([{ id: 1, url: 'https://example.com/apply' }]); },
+        sendMessage: function (tabId, message, callback) {
+          if (message.type === 'ping') return callback({ version: '0.2.0' });
+          if (message.type === 'scan') return callback({ candidates: CANDIDATES });
+          if (message.type === 'fill') { window.__filled = message.fields; return callback({ results: [{ id: 'x', status: 'filled' }] }); }
+          callback({ results: [] });
+        }
+      },
+      scripting: { executeScript: function (options, callback) { if (callback) callback(); } }
+    };
+  </script>
+  <script src="../profile-parser.js"></script>
+  <script src="../popup.js"></script>
+  <pre id="smoke-result"></pre>
+  <script>
+    function snapshot(stage) {
+      var rows = Array.prototype.slice.call(document.querySelectorAll('.candidate')).map(function (card) {
+        return {
+          badge: (card.querySelector('.confidence') || {}).textContent,
+          box: card.querySelector('input[type=checkbox]') ? card.querySelector('input[type=checkbox]').checked : null,
+          boxDisabled: card.querySelector('input[type=checkbox]') ? card.querySelector('input[type=checkbox]').disabled : null,
+          value: (card.querySelector('input[type=text]') || {}).value
+        };
+      });
+      return {
+        stage: stage, rows: rows,
+        fillDisabled: document.getElementById('fillConfirmed').disabled,
+        saveDisabled: document.getElementById('saveNewFields').disabled,
+        saveLabel: document.getElementById('saveNewFields').textContent
+      };
+    }
+    var steps = [];
+    setTimeout(function () {
+      document.getElementById('scanPage').click();
+      setTimeout(function () {
+        steps.push(snapshot('after scan'));
+        var box = document.querySelector('.candidate input[type=checkbox]');
+        box.checked = true; box.dispatchEvent(new Event('change', { bubbles: true }));
+        steps.push(snapshot('after ticking the box'));
+        var assign = document.querySelector('.assign-select');
+        assign.value = 'education.1.school'; assign.dispatchEvent(new Event('change', { bubbles: true }));
+        steps.push(snapshot('after assigning'));
+        document.getElementById('saveNewFields').click();
+        setTimeout(function () {
+          steps.push(snapshot('after saving the assignment'));
+          document.getElementById('fillConfirmed').click();
+          setTimeout(function () {
+            steps.push({ stage: 'fill payload', fields: (window.__filled || []).map(function (f) { return { label: f.label, profileKey: f.profileKey, value: f.proposedValue }; }) });
+            steps.push({ stage: 'stored label_mappings', mappings: ((window.__saved || {}).resumeProfile || {}).label_mappings });
+            document.getElementById('smoke-result').textContent = JSON.stringify(steps);
+          }, 150);
+        }, 150);
+      }, 80);
+    }, 0);
+  </script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+<body>
+  <form id="inner-form">
+    <label for="inner-school">毕业院校</label><input id="inner-school" name="innerSchool">
+    <fieldset><legend>性别</legend><label><input id="inner-gender-f" type="radio" name="innerGender" value="女">女</label><label><input id="inner-gender-m" type="radio" name="innerGender" value="男">男</label></fieldset>
+    <label for="inner-degree">学历</label><select id="inner-degree" name="innerDegree"><option>请选择</option><option>硕士</option><option>本科</option></select>
+    <label for="inner-code">岗位编号</label><input id="inner-code" name="innerCode" value="R-001">
+    <button type="submit">保存并下一步</button>
+  </form>
+  <script>
+    window.submitAttempts = 0;
+    document.querySelector('#inner-form').addEventListener('submit', function (event) {
+      event.preventDefault();
+      window.submitAttempts += 1;
+    });
+  </script>
+</body>
+</html>

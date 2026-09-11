@@ -1,0 +1,115 @@
+/* WinUI 3 (Windows 11) design resources, light theme.
+   Shared by popup.css and options.css. Values follow the WinUI 3 resource names
+   (ControlFillColorDefault, TextFillColorPrimary, AccentFillColorDefault, ...)
+   so they can be traced back to the design system. No remote assets: MV3 blocks them. */
+:root {
+  color-scheme: light;
+
+  /* ---------- Typography (WinUI 3 type ramp) ---------- */
+  --font-family-base: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  --font-family-display: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, "Microsoft YaHei UI", sans-serif;
+  --font-caption-size: 12px;      --font-caption-line: 16px;
+  --font-body-size: 14px;         --font-body-line: 20px;
+  --font-body-large-size: 18px;   --font-body-large-line: 24px;
+  --font-subtitle-size: 20px;     --font-subtitle-line: 28px;
+  --font-title-size: 28px;        --font-title-line: 36px;
+  --weight-regular: 400;
+  --weight-semibold: 600;
+
+  /* ---------- Corner radius ---------- */
+  --control-corner-radius: 4px;   /* ControlCornerRadius */
+  --overlay-corner-radius: 8px;   /* OverlayCornerRadius */
+
+  /* ---------- Spacing ---------- */
+  --space-xxs: 2px;
+  --space-xs: 4px;
+  --space-s: 8px;
+  --space-m: 12px;
+  --space-l: 16px;
+  --space-xl: 20px;
+  --space-xxl: 24px;
+
+  /* ---------- Text (TextFillColor*) ---------- */
+  --text-primary: rgba(0, 0, 0, .8956);
+  --text-secondary: rgba(0, 0, 0, .6212);
+  --text-tertiary: rgba(0, 0, 0, .4472);
+  --text-disabled: rgba(0, 0, 0, .3614);
+  --text-on-accent: #ffffff;
+  --text-on-accent-secondary: rgba(255, 255, 255, .7);
+
+  /* ---------- Backgrounds (SolidBackgroundFillColor*) ---------- */
+  --bg-base: #f3f3f3;             /* window / Mica fallback */
+  --bg-secondary: #eeeeee;
+  --bg-tertiary: #f9f9f9;
+  --bg-quarternary: #ffffff;
+  --bg-layer: rgba(255, 255, 255, .5);
+  --card-background: rgba(255, 255, 255, .7);
+
+  /* ---------- Control fills (ControlFillColor*) ---------- */
+  --control-fill: #fdfdfd;
+  --control-fill-hover: #f6f6f6;
+  --control-fill-pressed: #f0f0f0;
+  --control-fill-disabled: #f5f5f5;
+  --control-fill-input-active: #ffffff;
+
+  /* ---------- Subtle fills (SubtleFillColor*) ---------- */
+  --subtle-hover: rgba(0, 0, 0, .0373);
+  --subtle-pressed: rgba(0, 0, 0, .0241);
+  --subtle-selected: rgba(0, 0, 0, .0578);
+
+  /* ---------- Strokes ---------- */
+  --control-stroke: rgba(0, 0, 0, .0578);        /* ControlStrokeColorDefault */
+  --control-stroke-strong: rgba(0, 0, 0, .0956); /* ControlStrokeColorSecondary */
+  --control-stroke-disabled: rgba(0, 0, 0, .0578);
+  --card-stroke: rgba(0, 0, 0, .0578);
+  --divider-stroke: rgba(0, 0, 0, .0808);
+  /* ControlElevationBorderBrush is a vertical gradient; two flat tones read the same. */
+  --elevation-border-top: rgba(0, 0, 0, .0578);
+  --elevation-border-bottom: rgba(0, 0, 0, .0902);
+
+  /* ---------- System status (SystemFillColor*) ---------- */
+  --system-success: #0f7b0f;
+  --system-success-bg: #dff6dd;
+  --system-caution: #9d5d00;
+  --system-caution-bg: #fff4ce;
+  --system-critical: #c42b1c;
+  --system-critical-bg: #fde7e9;
+  --system-neutral-bg: #f6f6f6;
+  --system-solid-neutral: #8a8a8a;
+
+  /* ---------- Focus visual ---------- */
+  --focus-primary: rgba(0, 0, 0, .8956);   /* outer ring */
+  --focus-secondary: rgba(255, 255, 255, .7); /* inner ring */
+
+  /* ---------- Accent (AccentFillColorDefault, Windows default blue) ---------- */
+  --accent: #0078d4;
+  --accent-hover: #106ebe;
+  --accent-pressed: #005a9e;
+  --accent-disabled: rgba(0, 0, 0, .2169);
+  --accent-text: #003e92;
+  --accent-subtle: #e8f1fb;
+  --accent-on-subtle: #005a9e;
+
+  /* ---------- Shadow (WinUI uses sparse, tight shadows) ---------- */
+  --shadow-flyout: 0 8px 16px rgba(0, 0, 0, .14);
+  --shadow-dialog: 0 32px 64px rgba(0, 0, 0, .24), 0 2px 21px rgba(0, 0, 0, .14);
+
+  /* ---------- Metrics and motion ---------- */
+  --control-height: 32px;
+  --control-height-lg: 40px;
+  --control-fast-duration: 167ms;
+  --control-normal-duration: 250ms;
+  --easing: cubic-bezier(0, 0, 0, 1);   /* ControlFastOutSlowInKeySpline */
+}
+
+/* Derive the accent ramp from --accent so the colour picker only sets one value.
+   Chrome 111+ resolves color-mix; the literals above stay as the fallback. */
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  :root {
+    --accent-hover: color-mix(in srgb, var(--accent) 90%, black);
+    --accent-pressed: color-mix(in srgb, var(--accent) 80%, black);
+    --accent-text: color-mix(in srgb, var(--accent) 80%, black);
+    --accent-subtle: color-mix(in srgb, var(--accent) 12%, white);
+    --accent-on-subtle: color-mix(in srgb, var(--accent) 85%, black);
+  }
+}

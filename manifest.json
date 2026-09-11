@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "本地简历填充助手",
+  "version": "0.2.0",
+  "description": "只在用户点击后扫描并填充简历表单的本地 Chrome 扩展。",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "action": {
+    "default_title": "本地简历填充助手",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "options_page": "options.html",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAoVw5/FBM+VeWfWCskaoqDmCWxKRtRR1w8BP23yxXM4tqs5kPLpro8MVvrpK3DAAVoMMxp7qEu+E0YMo+g+xbuHwsWl8OTnZvQR5IPoJPSZwZzM0zSEo7cMgI+84xfTmXzO9KmkDBsQGAuo7xhTVyKc0F/9KuBk1YYpdTUO2/t3VCsyC0fMgAeYtwCzaOxXpwW/owQ+jM2SZBDNJ2H2empO3eXfvecx96k2ouKBZuCAk6v7jVgNcHPp9yTTt18MLqcG4TLdG4nIriwiCdUojlzNj51r/pkkxtNG/pjSNXkkqcOa6/fOKMOfrgDmPM341+Xm7JMRqkP8vkH0RcSOvaAQIDAQAB"
+}

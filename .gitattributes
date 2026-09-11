@@ -1,0 +1,16 @@
+# Keep every text file stored as LF and checked out as LF, on every platform.
+#
+# Git for Windows ships core.autocrlf=true in its system config, which rewrites line endings on
+# checkout. Without this file a Windows clone and a macOS/Linux clone would disagree about every
+# line ending, and the checked-out working tree would look modified straight after cloning.
+* text=auto eol=lf
+
+# Binary assets must never be line-ending converted.
+*.png binary
+*.jpg binary
+*.ico binary
+*.zip binary
+
+# The PowerShell scripts carry Chinese text and are read as UTF-8 with a BOM by both Windows
+# PowerShell 5.1 and PowerShell 7, so pinning LF keeps them byte-identical everywhere.
+*.ps1 text eol=lf

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="Resume autofill">
+  <title>Resume autofill</title>
+  <!-- Master artwork. Rasterise with tools/render-icons.ps1; do not edit the PNGs by hand. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2E9BEA"/>
+      <stop offset="1" stop-color="#0060B4"/>
+    </linearGradient>
+    <filter id="sheetShadow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#00315E" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <rect width="128" height="128" rx="28" fill="url(#tile)"/>
+
+  <!-- The form sheet -->
+  <rect x="36" y="27" width="56" height="74" rx="9" fill="#ffffff" filter="url(#sheetShadow)"/>
+
+  <!-- Field rows, lightened so they read as empty inputs -->
+  <rect x="46" y="41" width="36" height="6" rx="3" fill="#a9cdee"/>
+  <rect x="46" y="52" width="26" height="6" rx="3" fill="#a9cdee"/>
+
+  <!-- Filled-in confirmation -->
+  <path d="M46 82 L55 90 L78 67" fill="none" stroke="#0078d4" stroke-width="9"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
