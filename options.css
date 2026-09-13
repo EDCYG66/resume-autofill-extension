@@ -329,6 +329,43 @@ input.is-invalid:focus {
 }
 .field-hint[hidden] { display: none; }
 
+.field-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+.field-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  line-height: 14px;
+  min-height: 22px;
+  padding: 2px 8px;
+  border-radius: 11px;
+  background: var(--control-fill);
+  color: var(--text-secondary);
+  border: 1px solid var(--control-stroke);
+  border-bottom-color: var(--elevation-border-bottom);
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--control-fast-duration) var(--easing),
+              border-color var(--control-fast-duration) var(--easing),
+              color var(--control-fast-duration) var(--easing);
+}
+.field-chip:hover {
+  background: var(--control-fill-hover);
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+.field-chip.active {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
+  font-weight: var(--weight-semibold);
+}
+
+
 /* ---------- CheckBox ---------- */
 input[type="checkbox"] {
   position: relative;

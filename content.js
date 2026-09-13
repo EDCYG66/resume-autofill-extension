@@ -10,6 +10,8 @@
           else if (message && message.type === 'scan') sendResponse({ candidates: api.scan(message.profile || {}, message.context || {}) });
           else if (message && message.type === 'fill') api.fill(message.fields || []).then(function (results) { sendResponse({ results: results }); return; }, function () { sendResponse({ results: [], error: '填充失败' }); });
           else if (message && message.type === 'remember') sendResponse({ remembered: api.rememberFields(message.fields || [], message.siteKey || '') });
+          else if (message && message.type === 'highlight') sendResponse({ highlighted: api.highlight(message.field) });
+          else if (message && message.type === 'clearHighlight') sendResponse({ cleared: api.clearHighlight() });
           else sendResponse({});
         } catch (error) {
           sendResponse({ error: '页面处理失败' });
@@ -40,6 +42,8 @@
     gender: ['性别', '您的性别', 'gender', 'sex'],
     birth_date: ['出生日期', '出生年月', '出生年月日', '出生日', '生日', '出生时间', 'birth date', 'birthday', 'date of birth', 'dob'],
     age: ['年龄', '您的年龄', 'age'],
+    work_start_date: ['参加工作时间', '开始工作时间', '首次参加工作时间', '参加工作日期'],
+    work_years: ['工作经验', '工作年限', '工作经历年限', '从业年限', '经验年限'],
     ethnicity: ['民族', '民族成分', 'ethnicity'],
     native_place: ['籍贯', '籍贯地', '祖籍', 'native place'],
     political_status: ['政治面貌', '政治面貌情况', '党派', 'political status'],
@@ -49,11 +53,12 @@
     current_residence: ['现居住地', '现居住地址', '现居地', '现住址', '居住地', '常住地', '现居'],
     mailing_address: ['通信地址', '通讯地址', '联系地址', '邮寄地址', '收件地址', '详细地址'],
     phone: ['联系电话', '手机号', '手机号码', '电话号码', '联系手机', '本人手机', '常用电话', '手机', '移动电话', '电话', 'mobile', 'phone', 'tel', 'telephone', 'cell phone'],
-    phone_code: ['手机类别', '电话区号', '国际区号', '手机区号', '国家代码'],
+    phone_code: ['手机类别', '手机区号', '电话区号', '国际区号', '国家代码', '国家区号', '区号', '国家/地区代码', '国家/地区'],
     email: ['邮箱', '电子邮箱', '电子邮件', '邮箱地址', '电子信箱', '常用邮箱', '邮件', 'email', 'e-mail', 'mail'],
     wechat: ['微信', '微信号', '微信账号', 'wechat', 'weixin'],
     qq: ['QQ', 'QQ号', 'QQ号码', 'qq'],
     id_type: ['证件类型', '证件类别', '证件种类', '身份证件类型'],
+    id_number: ['身份证号', '身份证号码', '证件号码', '证件号', '公民身份号码', '身份证件号', '证件编号', 'idcard', 'idnumber'],
     has_children: ['有无子女', '是否有子女', '子女情况', '子女状况'],
     emergency_contact: ['紧急联系人', '紧急联系人姓名', '紧急联络人'],
     emergency_phone: ['紧急联系电话', '紧急联系人电话', '紧急联系方式', '紧急联络电话'],
@@ -61,10 +66,10 @@
     weight: ['体重', '净体重', '体重kg', '体重(kg)', '体重（kg）', 'weight'],
     // 求职意向
     target_role: ['期望职位', '目标职位', '应聘职位', '意向职位', '期望岗位', '意向岗位', '应聘岗位', '目标岗位', '求职岗位', '期望职业', '求职意向', '应聘意向', '岗位', '职位'],
-    industry: ['期望行业', '意向行业', '目标行业', '行业'],
-    city: ['期望城市', '意向城市', '工作城市', '期望工作城市', '意向工作城市', '期望地区', '意向地区'],
-    salary: ['期望薪资', '期望月薪', '期望年薪', '期望工资', '薪资要求', '薪酬要求', '月薪要求', '薪资', '薪水'],
-    employment_type: ['工作性质', '就业性质', '职位类型', '求职类型', '工作类型'],
+    industry: ['期望行业', '意向行业', '目标行业', '所属行业', '公司行业', '行业'],
+    city: ['期望城市', '意向城市', '工作城市', '期望工作城市', '意向工作城市', '期望工作地点', '意向工作地点', '期望工作地', '期望地区', '意向地区'],
+    salary: ['期望薪资', '期望薪资要求', '期望月薪', '期望年薪', '期望工资', '薪资要求', '薪酬要求', '月薪要求', '薪资', '薪水'],
+    employment_type: ['工作性质', '就业性质', '职位类型', '职位性质', '求职类型', '工作类型'],
     available_date: ['可到岗时间', '到岗时间', '到岗日期', '最快到岗', '可入职时间'],
     interview_site: ['面试站点', '面试地点', '面试城市', '面试地址', '应聘站点'],
     // 教育经历
@@ -74,8 +79,8 @@
     end_date: ['结束时间', '结束年月', '结束日期', '截止时间', '截止日期', '毕业时间', '毕业年月', '离校时间', '离职时间', 'end date'],
     duration_years: ['学制', '学制年限', '修业年限'],
     level: ['学历', '学历层次', '最高学历', '现有学历', '目前学历', '培养层次'],
-    admission_type: ['招生类型', '培养类型', '招生方式', '录取类型', '录取批次'],
-    study_mode: ['学习形式', '学习方式', '就读形式', '培养方式'],
+    admission_type: ['招生类型', '培养类型', '招生方式', '录取类型', '录取批次', '统招', '非统招', '统招统分'],
+    study_mode: ['学习形式', '学习方式', '就读形式', '培养方式', '全日制', '非全日制'],
     graduate_type: ['应届往届', '应届/往届', '毕业生类型', '生源类型', '是否应届'],
     degree_certificate: ['学位证', '学位证书', '是否取得学位'],
     degree_name: ['学位名称', '所获学位', '授予学位', '学位'],
@@ -93,7 +98,7 @@
     employer: ['公司', '公司名称', '企业名称', '单位', '单位名称', '工作单位', '任职单位', '雇主'],
     role: ['职位', '职位名称', '职务', '职务名称', '岗位', '担任职务'],
     organization: ['组织', '组织名称', '项目单位'],
-    employer_type: ['单位性质', '公司性质', '企业性质', '单位类型'],
+    employer_type: ['单位性质', '公司性质', '企业性质', '单位类型', '单位分类'],
     location: ['工作地点', '上班地点', '工作地区'],
     description: ['描述', '说明', '简介'],
     duties: ['工作内容', '工作职责', '岗位职责', '主要职责'],
@@ -113,7 +118,7 @@
     referral_code: ['校园大使推荐码', '内推推荐码', '推荐码', '内推码']
   };
   var DISPLAY_LABELS = {
-    name: '姓名', gender: '性别', birth_date: '出生日期', ethnicity: '民族', native_place: '籍贯', political_status: '政治面貌', household_registration: '户口所在地', place_of_origin: '生源地', current_residence: '现居住地', mailing_address: '通信地址', phone: '联系电话', email: '邮箱', target_role: '期望职位', industry: '期望行业', city: '期望城市', salary: '期望薪资', employment_type: '工作性质', available_date: '可到岗时间', school: '学校', college: '学院', start_date: '开始时间', end_date: '结束时间', duration_years: '学制', level: '学历', admission_type: '招生类型', study_mode: '学习形式', degree_certificate: '学位证', degree_name: '学位名称', major: '专业', major_category: '专业分类', major_rank: '专业排名', gpa: '绩点/均分', research_direction: '研究方向', advisor: '导师', employer: '单位', role: '职位', organization: '组织', self_evaluation: '自我评价', courses: '课程', duties: '工作内容', description: '描述', introduction: '项目介绍', outcomes: '项目成果', related_paper: '相关论文', category: '分类', skills: '相关技能', evidence: '应用说明', question: '题目', answer: '回答', custom_fields: '自定义字段', phone_code: '手机类别', id_type: '证件类型', has_children: '有无子女', qq: 'QQ', emergency_contact: '紧急联系人', emergency_phone: '紧急联系电话', interview_site: '面试站点', second_major: '第二专业', graduate_type: '应届往届', english_level: '英语等级', english_score: '英语等级成绩', thesis_title: '毕业论文题目', hobbies: '兴趣爱好', specialty: '特长', punishment: '受处分情况', academic_works: '学术专著', patents: '专利成果', law_violation: '违法违纪情况', applied_subsidiary: '是否应聘过本公司', relatives_in_company: '是否有亲友在本公司', medical_history: '手术史或重大疾病史', referral_code: '推荐码'
+    name: '姓名', gender: '性别', birth_date: '出生日期', ethnicity: '民族', native_place: '籍贯', political_status: '政治面貌', household_registration: '户口所在地', place_of_origin: '生源地', current_residence: '现居住地', mailing_address: '通信地址', phone: '联系电话', email: '邮箱', target_role: '期望职位', industry: '期望行业', city: '期望城市', salary: '期望薪资', employment_type: '工作性质', available_date: '可到岗时间', school: '学校', college: '学院', start_date: '开始时间', end_date: '结束时间', duration_years: '学制', level: '学历', admission_type: '招生类型', study_mode: '学习形式', degree_certificate: '学位证', degree_name: '学位名称', major: '专业', major_category: '专业分类', major_rank: '专业排名', gpa: '绩点/均分', research_direction: '研究方向', advisor: '导师', employer: '单位', role: '职位', organization: '组织', self_evaluation: '自我评价', courses: '课程', duties: '工作内容', description: '描述', introduction: '项目介绍', outcomes: '项目成果', related_paper: '相关论文', category: '分类', skills: '相关技能', evidence: '应用说明', question: '题目', answer: '回答', custom_fields: '自定义字段', phone_code: '手机区号 / 类别', id_type: '证件类型', id_number: '身份证号', has_children: '有无子女', qq: 'QQ', emergency_contact: '紧急联系人', emergency_phone: '紧急联系电话', interview_site: '面试站点', second_major: '第二专业', graduate_type: '应届往届', english_level: '英语等级', english_score: '英语等级成绩', thesis_title: '毕业论文题目', hobbies: '兴趣爱好', specialty: '特长', punishment: '受处分情况', academic_works: '学术专著', patents: '专利成果', law_violation: '违法违纪情况', applied_subsidiary: '是否应聘过本公司', relatives_in_company: '是否有亲友在本公司', medical_history: '手术史或重大疾病史', referral_code: '推荐码'
   };
   // Per-section aliases for leaves whose plain name means something different in each
   // section. A "name" under 荣誉 is an award, not a person. Defining an entry here also
@@ -215,10 +220,10 @@
     var type = normalizeText(element.type);
     if (['hidden', 'submit', 'reset', 'button', 'image', 'file'].indexOf(type) >= 0) return false;
     if (element.getAttribute && element.getAttribute('aria-hidden') === 'true') return false;
+    if (!isRendered(element)) return false;
     var view = viewOf(element);
     if (view && view.getComputedStyle) {
       var style = view.getComputedStyle(element);
-      if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
       if (style.pointerEvents === 'none' && !isCustomSelectControl(element)) return false;
     }
     return true;
@@ -343,12 +348,25 @@
     scanRoots().forEach(function (root) { controls = controls.concat(queryControls(root)); });
     return controls;
   }
+  // True when the control is actually rendered. An ancestor with display:none hides it, but
+  // getComputedStyle on the descendant still reports its own display value, so the plain style
+  // reads are not enough on their own.
+  function isRendered(element) {
+    if (!element) return false;
+    if (typeof element.checkVisibility === 'function') {
+      return element.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true, contentVisibilityAuto: true });
+    }
+    if (element.offsetParent === null) {
+      var view = viewOf(element);
+      var position = view && view.getComputedStyle ? view.getComputedStyle(element).position : '';
+      // offsetParent is also null for fixed positioning, where the element is on screen.
+      if (position !== 'fixed') return false;
+    }
+    return true;
+  }
   function isVisible(element) {
     if (!element || element.disabled || element.hidden) return false;
-    var view = viewOf(element);
-    if (!view || !view.getComputedStyle) return true;
-    var style = view.getComputedStyle(element);
-    return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+    return isRendered(element);
   }
   function cssEscape(value) { return String(value).replace(/[^a-zA-Z0-9_-]/g, function (char) { return '\\' + char; }); }
   function ancestorContextLabels(element) {
@@ -400,18 +418,59 @@
   function withoutTrailingNote(text) {
     return String(text).replace(/[（(][^（()）]*[)）]\s*$/, '').trim();
   }
+  // Sites qualify a column with the record it belongs to: 最高学历院校, 本科专业, 硕士导师.
+  // Trying the wording without that prefix lets those reach the plain alias, without losing the
+  // original: a bare 最高学历 still has to match 学历.
+  var LEADING_QUALIFIER_RE = /^(最高学历|最高学位|第一学历|本科|研究生|硕士|博士)/;
+  function withoutLeadingQualifier(text) {
+    var stripped = String(text).replace(LEADING_QUALIFIER_RE, '').trim();
+    return stripped === String(text).trim() ? '' : stripped;
+  }
+  var CJK_RE = /[\u3400-\u9fff]/;
+  function containsCjk(text) { return CJK_RE.test(String(text)); }
+  function isLatinWordChar(ch) { return /[A-Za-z0-9]/.test(ch); }
+  // Equal strings are handled before this runs. A latin alias must sit on a word boundary, or it
+  // is matching inside an identifier rather than a wording: "gpa" inside "gpAbroad", "mail"
+  // inside "mailingAddress", "name" inside "companyName". Chinese aliases need no such guard.
+  function substringHit(haystack, needle) {
+    var at = haystack.indexOf(needle);
+    if (at < 0) return false;
+    if (containsCjk(needle)) return true;
+    var before = at === 0 ? '' : haystack.charAt(at - 1);
+    var after = haystack.charAt(at + needle.length);
+    return !isLatinWordChar(before) && !isLatinWordChar(after);
+  }
+  function labelVariants(label) {
+    var seen = [];
+    [label, withoutTrailingNote(label), withoutLeadingQualifier(label),
+     withoutLeadingQualifier(withoutTrailingNote(label))].forEach(function (form) {
+      var normalized = normalizeText(form);
+      if (normalized && seen.indexOf(normalized) < 0) seen.push(normalized);
+    });
+    return seen;
+  }
   function labelMatchStrength(label, key, extraAliases) {
     var normalized = normalizeText(label);
     if (!normalized) return 'none';
     var rawSegments = String(label).split(/\s+/).filter(Boolean);
-    var segments = rawSegments.map(normalizeText).filter(Boolean);
-    // Every segment, plus the same segment with a trailing bracket removed.
-    var variants = segments.concat(rawSegments.map(function (part) { return normalizeText(withoutTrailingNote(part)); }).filter(Boolean));
-    var wholeVariants = [normalized, normalizeText(withoutTrailingNote(label))].filter(Boolean);
+    // Every segment, plus the same segment with its annotation removed. A single-segment label
+    // is not segment-matched: variants.length > 1 below guards that.
+    var variants = [];
+    rawSegments.forEach(function (part) {
+      labelVariants(part).forEach(function (form) { if (variants.indexOf(form) < 0) variants.push(form); });
+      variants.push(normalizeText(part));
+    });
+    var wholeVariants = labelVariants(label);
     var aliases = fieldAliases(key).concat((extraAliases || []).map(normalizeText)).filter(Boolean);
     if (aliases.some(function (alias) { return wholeVariants.indexOf(alias) >= 0; })) return 'exact';
     if (variants.length > 1 && variants.some(function (variant) { return aliases.indexOf(variant) >= 0; })) return 'exact';
-    if (aliases.some(function (alias) { return wholeVariants.some(function (v) { return v.indexOf(alias) >= 0 || alias.indexOf(v) >= 0; }); })) return 'partial';
+    if (aliases.some(function (alias) {
+      return wholeVariants.some(function (variant) {
+        if (variant.indexOf(alias) >= 0) return substringHit(variant, alias);
+        if (alias.indexOf(variant) >= 0) return substringHit(alias, variant);
+        return false;
+      });
+    })) return 'partial';
     return 'none';
   }
   function aliasMatches(label, key, extraAliases) {
@@ -504,6 +563,15 @@
         var before = values.length;
         add(section + '.' + (index + 1), record, section);
         if (section === 'skills' && record && record.category) for (var offset = before; offset < values.length; offset++) values[offset].categoryValue = record.category;
+        if (section === 'employment' && record && Array.isArray(record.duties) && record.duties.length) {
+          var combinedDuties = record.duties.map(function (d) { return String(d || '').trim(); }).filter(Boolean).join('\n');
+          if (combinedDuties) {
+            values.push({ profileKey: 'employment.' + (index + 1) + '.duties', value: combinedDuties, label: '工作内容', aliases: ['工作内容', '工作职责', '岗位职责', '主要职责'] });
+            if (!record.description) {
+              values.push({ profileKey: 'employment.' + (index + 1) + '.description', value: combinedDuties, label: '工作内容', aliases: ['工作内容', '工作职责', '岗位职责', '主要职责'] });
+            }
+          }
+        }
       });
       else if (typeof value === 'object') add(section, value, section);
       else add(section, value, section);
@@ -519,6 +587,76 @@
   function tokensCover(allTokens, neededTokens) {
     return neededTokens.every(function (needed) { return allTokens.some(function (available) { return available.indexOf(needed) >= 0 || needed.indexOf(available) >= 0; }); });
   }
+  var ENUM_SYNONYMS = [
+    // 英语等级 (CET/TEM/IELTS/TOEFL)
+    ['大学英语六级', '英语六级', '六级', 'cet6', 'cet-6', 'cet 6'],
+    ['大学英语四级', '英语四级', '四级', 'cet4', 'cet-4', 'cet 4'],
+    ['专业八级', '英语专业八级', '专八', 'tem8', 'tem-8', 'tem 8'],
+    ['专业四级', '英语专业四级', '专四', 'tem4', 'tem-4', 'tem 4'],
+    ['雅思', 'ielts'],
+    ['托福', 'toefl'],
+    // 性别
+    ['男', '男性', 'male', 'm'],
+    ['女', '女性', 'female', 'f'],
+    // 学历 / 层次
+    ['博士研究生', '博士', '博士生', 'doctor', 'phd'],
+    ['硕士研究生', '硕士', '硕士生', '研究生', 'master'],
+    ['大学本科', '本科', '学士', 'bachelor'],
+    ['大学专科', '专科', '大专', '高职高专'],
+    // 证件类型
+    ['居民身份证', '身份证', '二代身份证', '二代居民身份证', '中国居民身份证'],
+    ['护照', '中国护照'],
+    ['港澳居民来往内地通行证', '港澳台居民居住证', '回乡证', '港澳通行证'],
+    ['台湾居民来往大陆通行证', '台胞证'],
+    // 政治面貌
+    ['中共党员', '党员', '中共党员含预备党员', '预备党员', '中共预备党员'],
+    ['共青团员', '团员', '共青团员团员'],
+    ['群众', '普通群众'],
+    // 婚姻与家庭
+    ['未婚', '单身'],
+    ['已婚', '已婚已育', '已婚未育'],
+    // 是非 / 布尔选项
+    ['无', '否', '没有', 'false', 'no', '0'],
+    ['有', '是', 'true', 'yes', '1'],
+    // 学习形式 / 培养方式 / 招聘类型
+    ['全日制', '统招全日制', '普通全日制'],
+    ['非全日制', '在职'],
+    ['应届生', '应届毕业生', '应届'],
+    ['往届生', '往届毕业生', '往届', '社会人员', '历届生'],
+    // 手机区号
+    ['+86', '86', '中国大陆+86', '中国大陆', '中国+86']
+  ];
+
+  function enumSynonymsFor(target) {
+    if (!target) return [];
+    var t = normalizeText(target);
+    var result = [];
+    for (var i = 0; i < ENUM_SYNONYMS.length; i++) {
+      var group = ENUM_SYNONYMS[i];
+      var hit = false;
+      for (var j = 0; j < group.length; j++) {
+        var syn = normalizeText(group[j]);
+        if (t === syn) { hit = true; break; }
+        if (syn.length >= 2 && t.indexOf(syn) >= 0) { hit = true; break; }
+        if (t.length >= 2 && syn.indexOf(t) >= 0) { hit = true; break; }
+        if ((syn === '男' && (t === '男' || t === '男性' || t === 'male' || t === 'm')) ||
+            (syn === '女' && (t === '女' || t === '女性' || t === 'female' || t === 'f')) ||
+            (syn === '无' && (t === '无' || t === '否' || t === '没有')) ||
+            (syn === '有' && (t === '有' || t === '是'))) {
+          hit = true;
+          break;
+        }
+      }
+      if (hit) {
+        group.forEach(function (w) {
+          var nw = normalizeText(w);
+          if (result.indexOf(nw) < 0) result.push(nw);
+        });
+      }
+    }
+    return result;
+  }
+
   function matchSelectOption(options, expected) {
     var target = normalizeText(expected); if (!target) return -1;
     for (var i = 0; i < options.length; i++) if (normalizeText(textOf(options[i])) === target || normalizeText(options[i].value) === target) return i;
@@ -526,13 +664,41 @@
     var targetStripped = stripOptionSuffix(target); if (targetStripped && targetStripped !== target) {
       for (var k = 0; k < options.length; k++) { var stripped = stripOptionSuffix(textOf(options[k])); if (stripped && (stripped === targetStripped || stripped.indexOf(targetStripped) >= 0 || targetStripped.indexOf(stripped) >= 0)) return k; }
     }
+    var synonyms = enumSynonymsFor(target);
+    if (synonyms.length) {
+      for (var s = 0; s < options.length; s++) {
+        var optText = normalizeText(textOf(options[s]));
+        var optVal = normalizeText(options[s] && options[s].value);
+        for (var si = 0; si < synonyms.length; si++) {
+          var syn = synonyms[si];
+          if (optText === syn || optVal === syn) return s;
+          if (optText && (optText.indexOf(syn) >= 0 || syn.indexOf(optText) >= 0)) return s;
+        }
+      }
+    }
     var needed = optionTokens(target); if (!needed.length) return -1;
     for (var m = 0; m < options.length; m++) { var candidateTokens = optionTokens(textOf(options[m])); if (candidateTokens.length && candidateTokens.length <= needed.length * 3 && tokensCover(candidateTokens, needed)) return m; }
     return -1;
   }
   function matchChoice(choices, expected) { return matchSelectOption(choices.map(function (choice) { return { value: choice.value, text: textOf(choice) || choice.value }; }), expected); }
   function isSubmitLike(control) { var type = normalizeText(control && control.type); var text = normalizeText(control && (control.text || control.label || control.value || textOf(control))); return ['submit', 'reset', 'image'].indexOf(type) >= 0 || /(提交|保存|下一步|下一页|确认|投递|上传|submit|save|next|apply|upload)/i.test(text); }
-  function findProfileValue(label, values, used, learned) { var exact = values.filter(function (item) { return !used[item.profileKey] && item.value && valueMatchesLabel(item, label, learned); }); if (!exact.length) return null; exact.sort(function (a, b) { return Number(normalizeText(label) === normalizeText(b.label)) - Number(normalizeText(label) === normalizeText(a.label)); }); return exact[0]; }
+  function findProfileValue(label, values, used, learned) {
+    var candidates = [];
+    (values || []).forEach(function (item) {
+      if (!item || used[item.profileKey] || !item.value) return;
+      var strength = profileLabelStrength(item, label, learned);
+      if (strength === 'none') return;
+      candidates.push({ item: item, exact: strength === 'exact', ownLabel: normalizeText(label) === normalizeText(item.label) });
+    });
+    if (!candidates.length) return null;
+    // Strongest match first; the field whose own label is the page label breaks ties.
+    candidates.sort(function (a, b) {
+      if (a.exact !== b.exact) return a.exact ? -1 : 1;
+      if (a.ownLabel !== b.ownLabel) return a.ownLabel ? -1 : 1;
+      return 0;
+    });
+    return candidates[0].item;
+  }
   function findDraft(profile, siteKey, fingerprint, profileKey) { return (profile && profile.site_drafts || []).find(function (draft) { return String(draft.site_key || '') === String(siteKey || '') && String(draft.fingerprint || '') === String(fingerprint || '') && (!profileKey || String(draft.profile_key || '') === String(profileKey)); }) || null; }
   function isDateField(control, label) {
     if (!control) return false;
@@ -852,5 +1018,50 @@
     });
     return safeFields.length;
   }
-  return { normalizeText: normalizeText, isPlaceholderValue: isPlaceholderValue, buildLearnedMap: buildLearnedMap, findLearnedValue: findLearnedValue, leafProfileKey: leafProfileKey, learnedMatch: learnedMatch, fieldConfidence: fieldConfidence, labelMatchStrength: labelMatchStrength, profileLabelStrength: profileLabelStrength, matchChoiceIndexes: matchChoiceIndexes, choiceTokens: choiceTokens, booleanChoice: booleanChoice, choiceItems: choiceItems, choiceText: choiceText, scanRoots: scanRoots, allControls: allControls, controlIndex: controlIndex, isLiveControl: isLiveControl, deriveLabel: deriveLabel, flattenProfile: flattenProfile, matchSelectOption: matchSelectOption, matchDateSelectOption: matchDateSelectOption, matchChoice: matchChoice, isSubmitLike: isSubmitLike, isSensitiveField: isSensitiveField, isGenericPrompt: isGenericPrompt, cleanFieldLabel: cleanFieldLabel, isUsableFieldLabel: isUsableFieldLabel, shouldIncludeCandidate: shouldIncludeCandidate, customControlValue: customControlValue, readControlValue: readControlValue, isScannableControl: isScannableControl, isCustomSelectControl: isCustomSelectControl, findCustomOptions: findCustomOptions, combineContextLabel: combineContextLabel, findContainerLabel: findContainerLabel, preferredContainerSelectors: preferredContainerSelectors, isNavigationOnlyLabel: isNavigationOnlyLabel, isDateComponentLabel: isDateComponentLabel, dateComponentValue: dateComponentValue, dedupeControlDescriptors: dedupeControlDescriptors, dedupeFieldDescriptors: dedupeFieldDescriptors, valueMatchesLabel: valueMatchesLabel, setNativeValue: setNativeValue, makeFingerprint: makeFingerprint, siteMappingMatches: siteMappingMatches, collectDraftValues: collectDraftValues, upsertDrafts: upsertDrafts, scan: scan, fill: fill, rememberFields: rememberFields };
+  var currentHighlightEl = null;
+  var highlightTimer = null;
+  function ensureHighlightStyle() {
+    if (typeof document === 'undefined') return;
+    var id = '__resume_autofill_style';
+    if (!document.getElementById(id)) {
+      var style = document.createElement('style');
+      style.id = id;
+      style.textContent = '@keyframes __resume_pulse { 0% { box-shadow: 0 0 0 0 rgba(0, 120, 212, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(0, 120, 212, 0); } 100% { box-shadow: 0 0 0 0 rgba(0, 120, 212, 0); } } .__resume_autofill_highlight { outline: 3px solid #0078d4 !important; outline-offset: 3px !important; animation: __resume_pulse 1.6s infinite !important; border-radius: 4px !important; transition: outline 0.2s ease !important; }';
+      (document.head || document.documentElement).appendChild(style);
+    }
+  }
+  function clearHighlight() {
+    if (highlightTimer) { clearTimeout(highlightTimer); highlightTimer = null; }
+    if (typeof document !== 'undefined') {
+      var highlighted = document.querySelectorAll('.__resume_autofill_highlight');
+      for (var i = 0; i < highlighted.length; i++) {
+        highlighted[i].classList.remove('__resume_autofill_highlight');
+      }
+    }
+    currentHighlightEl = null;
+    return true;
+  }
+  function highlight(field) {
+    if (typeof document === 'undefined' || !field) return false;
+    clearHighlight();
+    var control = resolveField(field, controlIndex());
+    if (!control) return false;
+    ensureHighlightStyle();
+    var target = control;
+    if (control.offsetWidth === 0 && control.offsetHeight === 0 && control.closest) {
+      target = control.closest('.el-select') || control.closest('.ant-select') || control.parentElement || control;
+    }
+    target.classList.add('__resume_autofill_highlight');
+    currentHighlightEl = target;
+    try {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+    } catch (_) {
+      try { target.scrollIntoView(false); } catch (e) {}
+    }
+    highlightTimer = setTimeout(function () {
+      clearHighlight();
+    }, 3000);
+    return true;
+  }
+  return { normalizeText: normalizeText, isRendered: isRendered, labelVariants: labelVariants, withoutLeadingQualifier: withoutLeadingQualifier, isPlaceholderValue: isPlaceholderValue, buildLearnedMap: buildLearnedMap, findLearnedValue: findLearnedValue, leafProfileKey: leafProfileKey, learnedMatch: learnedMatch, fieldConfidence: fieldConfidence, labelMatchStrength: labelMatchStrength, profileLabelStrength: profileLabelStrength, matchChoiceIndexes: matchChoiceIndexes, choiceTokens: choiceTokens, booleanChoice: booleanChoice, choiceItems: choiceItems, choiceText: choiceText, scanRoots: scanRoots, allControls: allControls, controlIndex: controlIndex, isLiveControl: isLiveControl, deriveLabel: deriveLabel, flattenProfile: flattenProfile, matchSelectOption: matchSelectOption, matchDateSelectOption: matchDateSelectOption, matchChoice: matchChoice, isSubmitLike: isSubmitLike, isSensitiveField: isSensitiveField, isGenericPrompt: isGenericPrompt, cleanFieldLabel: cleanFieldLabel, isUsableFieldLabel: isUsableFieldLabel, shouldIncludeCandidate: shouldIncludeCandidate, customControlValue: customControlValue, readControlValue: readControlValue, isScannableControl: isScannableControl, isCustomSelectControl: isCustomSelectControl, findCustomOptions: findCustomOptions, combineContextLabel: combineContextLabel, findContainerLabel: findContainerLabel, preferredContainerSelectors: preferredContainerSelectors, isNavigationOnlyLabel: isNavigationOnlyLabel, isDateComponentLabel: isDateComponentLabel, dateComponentValue: dateComponentValue, dedupeControlDescriptors: dedupeControlDescriptors, dedupeFieldDescriptors: dedupeFieldDescriptors, valueMatchesLabel: valueMatchesLabel, setNativeValue: setNativeValue, makeFingerprint: makeFingerprint, siteMappingMatches: siteMappingMatches, collectDraftValues: collectDraftValues, upsertDrafts: upsertDrafts, scan: scan, fill: fill, rememberFields: rememberFields, highlight: highlight, clearHighlight: clearHighlight };
 }));

@@ -32,6 +32,12 @@ if (-not $byStage.ContainsKey('after scan')) { throw 'The scan step did not run.
 if ($byStage['after scan'].rows[0].badge -ne '资料里没有') { throw 'An unrecognised field should start as 资料里没有.' }
 if ($byStage['after scan'].saveDisabled -ne $true) { throw 'Save should be disabled before any choice is made.' }
 
+$sensitive = $byStage['sensitive row after scan']
+if (-not $sensitive) { throw 'The sensitive row step did not run.' }
+if ($sensitive.badge -ne '需自己勾选') { throw "A sensitive column should be labelled 需自己勾选, got '$($sensitive.badge)'." }
+if ($sensitive.checked -ne $false) { throw 'A sensitive column must not be ticked for the applicant.' }
+if ($sensitive.disabled -ne $false) { throw 'The applicant must still be able to tick a sensitive column themselves.' }
+
 if ($byStage['after assigning'].rows[0].badge -ne '已对上') { throw 'Assigning should change the badge to 已对上.' }
 if ($byStage['after assigning'].rows[0].value -ne '示例大学') { throw 'Assigning should prefill the value from the profile.' }
 if ($byStage['after assigning'].saveDisabled -ne $false) { throw 'Save should be enabled once a field is assigned.' }
@@ -42,13 +48,28 @@ if ($saved.saveLabel -ne '记住这一项') { throw "Unexpected save label: $($s
 
 $payload = $byStage['fill payload']
 if (-not $payload) { throw 'The fill step did not run.' }
-if ($payload.fields.Count -ne 1) { throw "Expected one field in the fill payload, got $($payload.fields.Count)." }
-if ($payload.fields[0].profileKey -ne 'education.1.school') { throw "Wrong profile key: $($payload.fields[0].profileKey)" }
-if ($payload.fields[0].value -ne '示例大学') { throw "Wrong value: $($payload.fields[0].value)" }
+# Two entries: the assigned column, plus the sensitive one the driver ticked by hand.
+if ($payload.fields.Count -ne 2) { throw "Expected two fields in the fill payload, got $($payload.fields.Count)." }
+$assigned = @($payload.fields | Where-Object { $_.profileKey -eq 'education.1.school' })
+if ($assigned.Count -ne 1) { throw 'The assigned column is missing from the fill payload.' }
+if ($assigned[0].value -ne '示例大学') { throw "Wrong value: $($assigned[0].value)" }
+$sensitiveField = @($payload.fields | Where-Object { $_.profileKey -eq 'basic.id_number' })
+if ($sensitiveField.Count -ne 1) { throw 'A sensitive column ticked by hand should reach the page.' }
+
+$quick = $byStage['quick copy']
+if (-not $quick) { throw 'The 资料速查 step did not run.' }
+# The list is built from the shared field catalog, so it reaches sections and list-shaped fields
+# the old hand-written table never covered.
+if ($quick.coversAdditional -ne $true) { throw '资料速查 should cover the 附加信息 section.' }
+if ($quick.coversIdNumber -ne $true) { throw '资料速查 should offer 证件号码.' }
+if ($quick.coversCourses -ne $true) { throw '资料速查 should offer the course list.' }
+# A floor only: the fixture profile is deliberately small, so this just catches the list
+# coming back empty for a whole shape of section. The content checks above are the real ones.
+if ($quick.count -lt 6) { throw "资料速查 only produced $($quick.count) entries." }
 
 $stored = $byStage['stored label_mappings']
 if (-not $stored -or $stored.mappings.Count -ne 1) { throw 'The assignment was not persisted.' }
 if ($stored.mappings[0].label -ne '学习经历') { throw "Wrong learned label: $($stored.mappings[0].label)" }
 if ($stored.mappings[0].profile_key -ne 'education.1.school') { throw "Wrong learned key: $($stored.mappings[0].profile_key)" }
 
-Write-Output 'Popup assignment smoke test passed: scan, assign, save and fill payload all consistent.'
+Write-Output ("Popup smoke test passed: scan, assign, save and fill consistent; " + "sensitive column stays unticked until asked; 资料速查 lists " + $quick.count + " entries.")

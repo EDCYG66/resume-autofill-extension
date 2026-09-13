@@ -1,49 +1,111 @@
-:root { font-family: var(--font-family-base); }
-* { box-sizing: border-box; }
+:root {
+  font-family: var(--font-family-base);
+  color-scheme: light;
+}
+* {
+  box-sizing: border-box;
+}
+
 body {
-  width: 390px;
+  width: 420px;
+  max-height: 600px;
   margin: 0;
   color: var(--text-primary);
   background: var(--bg-base);
   font-size: var(--font-body-size);
   line-height: var(--font-body-line);
+  user-select: none;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
-/* ---------- Layout ---------- */
-main { padding: 0 0 var(--space-l); }
-
-header {
+/* ---------- Popup Layout & Container ---------- */
+.popup-container {
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+/* ---------- Header & Brand ---------- */
+.app-header {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: var(--space-m);
-  padding: var(--space-m) var(--space-m) 10px;
-  background: var(--bg-layer);
+  gap: var(--space-s);
+  padding: 12px 14px 10px;
+  background: #ffffff;
   border-bottom: 1px solid var(--divider-stroke);
 }
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.brand-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+  color: #ffffff;
+  flex: none;
+  box-shadow: 0 2px 6px rgba(0, 120, 212, 0.25);
+}
+
+.brand-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.brand-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 h1 {
   margin: 0;
   font-family: var(--font-family-display);
-  font-size: var(--font-body-large-size);
-  line-height: var(--font-body-large-line);
+  font-size: 15px;
+  line-height: 20px;
   font-weight: var(--weight-semibold);
-}
-h2 {
-  margin: 0;
-  font-size: var(--font-body-size);
-  line-height: var(--font-body-line);
-  font-weight: var(--weight-semibold);
-}
-header p {
-  margin: 1px 0 0;
-  color: var(--text-secondary);
-  font-size: var(--font-caption-size);
-  line-height: var(--font-caption-line);
+  letter-spacing: -0.2px;
+  color: var(--text-primary);
 }
 
-/* ---------- Buttons ----------
-   WinUI 3 standard button: light fill with an elevation border that is darker on
-   the bottom edge, which is what gives the control its resting depth. */
+.safe-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--system-success-bg);
+  color: var(--system-success);
+  font-size: 10px;
+  font-weight: var(--weight-semibold);
+  line-height: 14px;
+}
+
+.brand-subtitle {
+  margin: 1px 0 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+/* ---------- Buttons & Icons ---------- */
 button {
   display: inline-flex;
   align-items: center;
@@ -57,329 +119,593 @@ button {
   background: var(--control-fill);
   color: var(--text-primary);
   font: inherit;
+  font-size: 13px;
   font-weight: var(--weight-semibold);
   line-height: 20px;
   cursor: pointer;
-  transition: background var(--control-fast-duration) var(--easing),
-              border-color var(--control-fast-duration) var(--easing);
+  transition: all var(--control-fast-duration) var(--easing);
 }
-button:hover:not(:disabled) { background: var(--control-fill-hover); }
-button:active:not(:disabled) { background: var(--control-fill-pressed); color: var(--text-secondary); }
+
+button:hover:not(:disabled) {
+  background: var(--control-fill-hover);
+}
+
+button:active:not(:disabled) {
+  background: var(--control-fill-pressed);
+  transform: scale(0.99);
+}
+
 button:disabled {
   cursor: not-allowed;
   background: var(--control-fill-disabled);
   border-color: var(--control-stroke-disabled);
   color: var(--text-disabled);
+  box-shadow: none;
 }
 
-/* Focus visual: 2px outer ring with a 1px inner ring, as WinUI draws it. */
 button:focus-visible {
   outline: 2px solid var(--focus-primary);
   outline-offset: 1px;
-  box-shadow: 0 0 0 1px var(--focus-secondary);
 }
 
 .primary {
-  width: 100%;
   border-color: transparent;
   background: var(--accent);
   color: var(--text-on-accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
-.primary:hover:not(:disabled) { background: var(--accent-hover); }
-.primary:active:not(:disabled) { background: var(--accent-pressed); color: var(--text-on-accent-secondary); }
+
+.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  box-shadow: 0 2px 6px rgba(0, 120, 212, 0.3);
+}
+
+.primary:active:not(:disabled) {
+  background: var(--accent-pressed);
+  color: var(--text-on-accent-secondary);
+}
+
 .primary:disabled {
   background: var(--accent-disabled);
   border-color: transparent;
   color: var(--text-disabled);
 }
 
+.secondary-btn {
+  background: #ffffff;
+  border-color: var(--control-stroke-strong);
+  color: var(--text-primary);
+}
+.secondary-btn:hover:not(:disabled) {
+  background: var(--subtle-hover);
+}
+
 .icon-button {
-  width: var(--control-height);
-  height: var(--control-height);
+  width: 30px;
+  height: 30px;
   min-height: 0;
   padding: 0;
   flex: none;
-  border-color: transparent;
+  border: 1px solid transparent;
   background: transparent;
+  color: var(--text-secondary);
+  border-radius: var(--control-corner-radius);
+}
+
+.icon-button:hover:not(:disabled) {
+  background: var(--subtle-hover);
   color: var(--text-primary);
 }
-.icon-button:hover:not(:disabled) { background: var(--subtle-hover); }
-.icon-button:active:not(:disabled) { background: var(--subtle-pressed); }
 
-button svg { flex: none; }
-
-/* ---------- Toolbar ---------- */
-.toolbar {
-  display: flex;
-  gap: var(--space-s);
-  padding: var(--space-m) var(--space-m) 0;
+.icon-button:active:not(:disabled) {
+  background: var(--subtle-pressed);
 }
-.toolbar button { flex: 1; }
 
-/* ---------- Cards (WinUI layer surface) ---------- */
-.scan-panel,
-#review {
-  margin: var(--space-m) var(--space-m) 0;
-  padding: var(--space-m);
+/* ---------- Popup Navigation Segment Control ---------- */
+.popup-nav {
+  display: flex;
+  padding: 6px 12px 0;
+  background: #ffffff;
+  border-bottom: 1px solid var(--divider-stroke);
+  gap: 6px;
+}
+
+.nav-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 4px 4px 0 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: var(--weight-regular);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.nav-tab:hover {
+  color: var(--text-primary);
+  background: var(--subtle-hover);
+}
+
+.nav-tab.active {
+  color: var(--accent);
+  font-weight: var(--weight-semibold);
+  border-bottom-color: var(--accent);
+}
+
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.active {
+  display: block;
+}
+
+/* ---------- Scan Panel ---------- */
+.scan-panel {
+  margin: 12px 12px 0;
+  padding: 12px;
   border: 1px solid var(--card-stroke);
   border-radius: var(--overlay-corner-radius);
-  background: var(--card-background);
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
-/* ---------- Status as an InfoBar ----------
-   Empty status stays invisible; once it has a message it becomes a WinUI InfoBar. */
+.scan-action-wrap {
+  display: flex;
+  gap: 8px;
+}
+
+.scan-main-btn {
+  width: 100%;
+  height: 38px;
+  font-size: 14px;
+}
+
+/* Status as an InfoBar */
 .status {
-  margin-top: var(--space-s);
+  margin-top: 8px;
   color: var(--text-secondary);
-  font-size: var(--font-caption-size);
-  line-height: var(--font-caption-line);
+  font-size: 12px;
+  line-height: 16px;
   min-height: 16px;
 }
+
 .status:not(:empty) {
-  padding: 7px 10px;
+  padding: 8px 10px;
   border: 1px solid var(--card-stroke);
   border-radius: var(--control-corner-radius);
   background: var(--system-neutral-bg);
 }
+
 .status.is-error:not(:empty) {
   border-color: var(--system-critical);
   background: var(--system-critical-bg);
-  color: var(--text-primary);
+  color: var(--system-critical);
+  font-weight: var(--weight-semibold);
 }
 
-/* ---------- Review ---------- */
+/* ---------- Candidate Review Panel ---------- */
+.review-panel {
+  margin: 12px 12px 12px;
+  padding: 12px;
+  border: 1px solid var(--card-stroke);
+  border-radius: var(--overlay-corner-radius);
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+}
+
 .review-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-s);
-  margin-bottom: var(--space-m);
+  margin-bottom: 10px;
 }
-#candidateCount {
+
+.heading-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h2 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.count-badge {
   flex: none;
-  padding: 1px var(--space-s);
-  border-radius: 10px;
+  padding: 2px 8px;
+  border-radius: 12px;
   background: var(--accent-subtle);
   color: var(--accent-on-subtle);
   font-size: 11px;
   font-weight: var(--weight-semibold);
-  line-height: 16px;
+  line-height: 14px;
 }
 
+.mini-text-btn {
+  min-height: 0;
+  padding: 3px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--accent-text);
+  font-size: 11px;
+  font-weight: var(--weight-regular);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.mini-text-btn:hover {
+  background: var(--subtle-hover);
+}
+
+/* Filter pills bar */
+.filter-bar {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.filter-pill {
+  min-height: 24px;
+  padding: 2px 9px;
+  border: 1px solid var(--control-stroke-strong);
+  border-radius: 12px;
+  background: var(--control-fill);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: var(--weight-regular);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.filter-pill:hover {
+  background: var(--subtle-hover);
+  color: var(--text-primary);
+}
+
+.filter-pill.active {
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+  color: var(--accent-text);
+  font-weight: var(--weight-semibold);
+}
+
+/* Batch control bar */
+.batch-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 4px;
+  margin-bottom: 8px;
+  border-top: 1px dashed var(--divider-stroke);
+  border-bottom: 1px dashed var(--divider-stroke);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.batch-select-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.batch-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.mini-btn {
+  min-height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--control-stroke);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: var(--weight-regular);
+}
+.mini-btn:hover {
+  background: var(--subtle-hover);
+  color: var(--text-primary);
+}
+
+/* Candidate list */
 .candidate-list {
   display: grid;
-  gap: var(--space-s);
-  max-height: 320px;
+  gap: 8px;
+  max-height: 330px;
   overflow-y: auto;
-  margin: 0 0 var(--space-m);
+  margin: 0 0 12px;
+  padding-right: 2px;
   scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, .35) transparent;
+  scrollbar-color: rgba(0, 0, 0, 0.25) transparent;
 }
 
 .candidate {
-  padding: 10px;
+  padding: 10px 12px;
   border: 1px solid var(--card-stroke);
-  border-radius: var(--control-corner-radius);
-  background: var(--bg-quarternary);
+  border-radius: var(--overlay-corner-radius);
+  background: #fafafa;
+  transition: all 0.15s ease;
+  position: relative;
 }
+
+.candidate:hover {
+  border-color: rgba(0, 120, 212, 0.4);
+  background: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.candidate.is-excluded {
+  opacity: 0.65;
+  background: #f5f5f5;
+}
+
 .candidate-top {
   display: flex;
   align-items: center;
-  gap: var(--space-s);
+  gap: 8px;
 }
+
 .candidate-top label {
   flex: 1;
   min-width: 0;
-  font-size: var(--font-caption-size);
+  font-size: 12px;
   font-weight: var(--weight-semibold);
-  line-height: var(--font-caption-line);
+  line-height: 16px;
+  color: var(--text-primary);
   overflow-wrap: anywhere;
+  cursor: pointer;
 }
 
-/* Status pills reuse the WinUI system fill colours. */
+/* Locate in page button */
+.locate-btn {
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  padding: 0;
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.locate-btn:hover {
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+
+/* Confidence pills */
 .confidence {
   flex: none;
-  padding: 1px var(--space-s);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
   border-radius: 10px;
   background: var(--system-neutral-bg);
   color: var(--text-secondary);
   font-size: 11px;
   font-weight: var(--weight-semibold);
-  line-height: 16px;
+  line-height: 14px;
   white-space: nowrap;
 }
-.confidence[data-tone="success"] { background: var(--system-success-bg); color: var(--system-success); }
-.confidence[data-tone="warning"] { background: var(--system-caution-bg); color: var(--system-caution); }
-.confidence[data-tone="danger"] { background: var(--system-critical-bg); color: var(--system-critical); }
 
-/* ---------- TextBox ----------
-   Resting: elevation border. Focused: the border becomes the accent underline,
-   which is how WinUI signals focus in text entry. */
+.confidence::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.confidence[data-tone="success"] {
+  background: var(--system-success-bg);
+  color: var(--system-success);
+}
+
+.confidence[data-tone="warning"] {
+  background: var(--system-caution-bg);
+  color: var(--system-caution);
+}
+
+.confidence[data-tone="danger"] {
+  background: var(--system-critical-bg);
+  color: var(--system-critical);
+}
+
+/* Inputs and textboxes */
+.candidate-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-top: 6px;
+}
+
 input[type="text"] {
   width: 100%;
-  height: var(--control-height);
-  margin-top: var(--space-s);
+  height: 30px;
+  margin: 0;
   padding: 0 10px;
-  border: 1px solid var(--control-stroke);
-  border-bottom-color: var(--elevation-border-bottom);
+  border: 1px solid var(--control-stroke-strong);
   border-radius: var(--control-corner-radius);
-  background: var(--control-fill);
+  background: #ffffff;
   color: var(--text-primary);
   font: inherit;
-  font-size: var(--font-caption-size);
-  transition: background var(--control-fast-duration) var(--easing);
+  font-size: 12px;
+  transition: all var(--control-fast-duration) var(--easing);
 }
-input[type="text"]::placeholder { color: var(--text-tertiary); }
-input[type="text"]:hover:not(:disabled) { background: var(--control-fill-hover); }
+
+input[type="text"]::placeholder {
+  color: var(--text-tertiary);
+}
+
+input[type="text"]:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
 input[type="text"]:focus {
   outline: none;
-  border-color: var(--control-stroke);
-  border-bottom-color: transparent;
-  background: var(--control-fill-input-active);
-  box-shadow: inset 0 -2px 0 0 var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.2);
 }
+
 input[type="text"]:disabled {
   background: var(--control-fill-disabled);
   border-color: var(--control-stroke-disabled);
   color: var(--text-disabled);
 }
 
-/* ---------- CheckBox ---------- */
+/* Custom CheckBox */
 input[type="checkbox"] {
   position: relative;
   flex: none;
-  width: 20px;
-  height: 20px;
+  width: 17px;
+  height: 17px;
   margin: 0;
   appearance: none;
-  border: 1px solid var(--text-secondary);
+  border: 1.5px solid var(--text-secondary);
   border-radius: var(--control-corner-radius);
-  background: var(--control-fill);
+  background: #ffffff;
   cursor: pointer;
-  transition: background var(--control-fast-duration) var(--easing),
-              border-color var(--control-fast-duration) var(--easing);
+  transition: all var(--control-fast-duration) var(--easing);
 }
-input[type="checkbox"]:hover:not(:disabled) { background: var(--control-fill-hover); }
+
+input[type="checkbox"]:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
 input[type="checkbox"]:checked {
   border-color: var(--accent);
   background: var(--accent);
 }
-input[type="checkbox"]:checked:hover:not(:disabled) { background: var(--accent-hover); }
+
 input[type="checkbox"]:checked::after {
   content: "";
   position: absolute;
-  left: 6px;
-  top: 2px;
-  width: 5px;
-  height: 10px;
-  border: solid var(--text-on-accent);
-  border-width: 0 1.6px 1.6px 0;
+  left: 4.5px;
+  top: 1.5px;
+  width: 4px;
+  height: 8px;
+  border: solid #ffffff;
+  border-width: 0 1.8px 1.8px 0;
   transform: rotate(45deg);
 }
+
 input[type="checkbox"]:disabled {
   border-color: var(--text-disabled);
   background: var(--control-fill-disabled);
   cursor: not-allowed;
 }
-input[type="checkbox"]:disabled:checked { background: var(--text-disabled); }
-input[type="checkbox"]:focus-visible {
-  outline: 2px solid var(--focus-primary);
-  outline-offset: 1px;
-}
 
-/* ---------- ToggleSwitch (remember this field) ----------
-   WinUI ToggleSwitch: a 40x20 track that fills with the accent when on. */
+/* Toggle Switch */
 .toggle-switch {
   display: flex;
   align-items: center;
   gap: var(--space-s);
-  margin-top: var(--space-s);
+  margin-top: 6px;
   color: var(--text-secondary);
   font-size: 11px;
   line-height: 16px;
   cursor: pointer;
 }
+
 .toggle-switch input[type="checkbox"] {
-  width: 40px;
-  height: 20px;
-  border: 1px solid var(--text-secondary);
-  border-radius: 10px;
+  width: 32px;
+  height: 18px;
+  border: 1.5px solid var(--text-secondary);
+  border-radius: 9px;
   background: transparent;
 }
+
 .toggle-switch input[type="checkbox"]::after {
   content: "";
   position: absolute;
-  left: 3px;
-  top: 3px;
-  width: 12px;
-  height: 12px;
+  left: 2px;
+  top: 2px;
+  width: 11px;
+  height: 11px;
   border: 0;
   border-radius: 50%;
   background: var(--text-secondary);
   transform: none;
-  transition: left var(--control-fast-duration) var(--easing),
-              background var(--control-fast-duration) var(--easing);
+  transition: all var(--control-fast-duration) var(--easing);
 }
-.toggle-switch input[type="checkbox"]:hover:not(:disabled) { background: var(--subtle-hover); }
+
 .toggle-switch input[type="checkbox"]:checked {
   border-color: var(--accent);
   background: var(--accent);
 }
-.toggle-switch input[type="checkbox"]:checked::after {
-  left: 23px;
-  background: var(--text-on-accent);
-}
-.toggle-switch input[type="checkbox"]:disabled {
-  border-color: var(--text-disabled);
-  background: var(--control-fill-disabled);
-}
-.toggle-switch input[type="checkbox"]:disabled::after { background: var(--text-disabled); }
 
-/* ---------- New field editor ---------- */
-/* The do-it-yourself form: one captioned input, so nothing depends on placeholder text
-   that disappears as soon as the user types. */
+.toggle-switch input[type="checkbox"]:checked::after {
+  left: 16px;
+  background: #ffffff;
+}
+
+/* New field editor */
 .custom-field {
   display: grid;
   gap: 2px;
-  margin-top: var(--space-s);
+  margin-top: 6px;
 }
+
 .custom-field-caption {
   color: var(--text-tertiary);
   font-size: 11px;
-  line-height: 16px;
+  line-height: 14px;
 }
-.custom-field input[type="text"] { margin-top: 2px; }
+
 .assign-summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-s);
-  margin-top: var(--space-s);
-  padding: 5px 6px 5px 10px;
+  margin-top: 6px;
+  padding: 4px 8px;
   border-radius: var(--control-corner-radius);
   background: var(--system-success-bg);
   color: var(--system-success);
-  font-size: var(--font-caption-size);
-  line-height: var(--font-caption-line);
+  font-size: 11px;
+  line-height: 14px;
 }
+
 .assign-clear {
-  min-height: 24px;
-  padding: 0 8px;
+  min-height: 20px;
+  padding: 0 6px;
   flex: none;
-  border-color: transparent;
+  border: 0;
   background: transparent;
   color: inherit;
   font-size: 11px;
-  font-weight: var(--weight-regular);
   text-decoration: underline;
+  cursor: pointer;
 }
-.assign-clear:hover:not(:disabled),
-.assign-clear:active:not(:disabled) { background: rgba(0, 0, 0, .06); color: inherit; }
 
-/* A quiet, text-only affordance for the do-it-yourself path. */
 .link-button {
   width: 100%;
-  min-height: 26px;
+  min-height: 24px;
   margin-top: 4px;
   padding: 0;
   justify-content: flex-start;
@@ -389,62 +715,200 @@ input[type="checkbox"]:focus-visible {
   font-size: 11px;
   font-weight: var(--weight-regular);
 }
-.link-button:hover:not(:disabled),
-.link-button:active:not(:disabled) { background: transparent; color: var(--accent-text); text-decoration: underline; }
+.link-button:hover:not(:disabled) {
+  text-decoration: underline;
+}
 
-/* Assigning the page field to a built-in one. Styled as a WinUI ComboBox. */
 .assign-select {
   width: 100%;
-  height: var(--control-height);
-  margin-top: var(--space-s);
+  height: 30px;
+  margin-top: 6px;
   padding: 0 8px;
-  border: 1px solid var(--control-stroke);
-  border-bottom-color: var(--elevation-border-bottom);
+  border: 1px solid var(--control-stroke-strong);
   border-radius: var(--control-corner-radius);
-  background: var(--control-fill);
+  background: #ffffff;
   color: var(--text-primary);
   font: inherit;
-  font-size: var(--font-caption-size);
+  font-size: 12px;
   cursor: pointer;
 }
-.assign-select:hover:not(:disabled) { background: var(--control-fill-hover); }
 .assign-select:focus {
   outline: none;
-  border-color: var(--control-stroke);
-  border-bottom-color: transparent;
-  background: var(--control-fill-input-active);
-  box-shadow: inset 0 -2px 0 0 var(--accent);
-}
-.assign-select:disabled {
-  background: var(--control-fill-disabled);
-  border-color: var(--control-stroke-disabled);
-  color: var(--text-disabled);
-  cursor: not-allowed;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.2);
 }
 
 .new-field-note {
-  margin-top: 6px;
+  margin-top: 4px;
   color: var(--system-caution);
   font-size: 11px;
-  line-height: 16px;
+  line-height: 14px;
 }
 
 .candidate small {
   display: block;
-  margin-top: 6px;
+  margin-top: 4px;
   color: var(--text-tertiary);
   font-size: 11px;
-  line-height: 16px;
+  line-height: 14px;
   overflow-wrap: anywhere;
 }
 
-/* ---------- Review actions ---------- */
-#review > button { width: 100%; }
-#review > button + button { margin-top: var(--space-s); }
+/* ---------- Review Footer Actions ---------- */
+.review-footer {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--divider-stroke);
+  display: grid;
+  gap: 8px;
+}
+
+.review-footer button {
+  width: 100%;
+}
+
+.fill-btn {
+  height: 38px;
+  font-size: 14px;
+}
 
 .empty {
   padding: var(--space-xl) 0;
   color: var(--text-tertiary);
   font-size: var(--font-caption-size);
   text-align: center;
+}
+
+/* ---------- Quick Copy Panel (Tab 2) ---------- */
+.quick-copy-header {
+  padding: 12px 14px 6px;
+}
+
+.search-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+#quickSearchInput {
+  padding-left: 32px;
+  padding-right: 28px;
+  height: 34px;
+  font-size: 13px;
+  border-radius: 6px;
+}
+
+.search-clear-btn {
+  position: absolute;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.quick-copy-tip {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.quick-copy-list {
+  display: grid;
+  gap: 8px;
+  padding: 6px 14px 14px;
+  max-height: 480px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.25) transparent;
+}
+
+.copy-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #ffffff;
+  border: 1px solid var(--card-stroke);
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: all 0.15s ease;
+}
+
+.copy-card:hover {
+  border-color: rgba(0, 120, 212, 0.4);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.copy-card-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.copy-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.copy-category-tag {
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--system-neutral-bg);
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.copy-card-val {
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.copy-action-btn {
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--control-stroke);
+  border-radius: 4px;
+  background: #ffffff;
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: var(--weight-regular);
+  cursor: pointer;
+  flex: none;
+  transition: all 0.15s ease;
+}
+
+.copy-action-btn:hover {
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.copy-action-btn.copied {
+  background: var(--system-success-bg);
+  border-color: var(--system-success);
+  color: var(--system-success);
+  font-weight: var(--weight-semibold);
 }

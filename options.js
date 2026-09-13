@@ -7,6 +7,7 @@
   var ICONS = {
     basic: '<circle cx="10" cy="6.75" r="2.75"/><path d="M4.75 16.25c0-2.5 2.35-4 5.25-4s5.25 1.5 5.25 4"/>',
     intention: '<rect x="2.75" y="6.5" width="14.5" height="9.25" rx="2"/><path d="M7.5 6.5V5.25A1.5 1.5 0 0 1 9 3.75h2a1.5 1.5 0 0 1 1.5 1.5V6.5"/><path d="M2.75 10.75h14.5"/>',
+    additional: '<circle cx="10" cy="10" r="7.25"/><line x1="10" y1="6.5" x2="10" y2="13.5"/><line x1="6.5" y1="10" x2="13.5" y2="10"/>',
     education: '<path d="M2.5 7.5 10 3.9l7.5 3.6L10 11.1 2.5 7.5Z"/><path d="M5.75 9.4v3.1c0 1.05 1.9 1.9 4.25 1.9s4.25-.85 4.25-1.9V9.4"/><path d="M17.5 7.5v4"/>',
     employment: '<path d="M3.5 4.75A1.25 1.25 0 0 1 4.75 3.5h5.5a1.25 1.25 0 0 1 1.25 1.25v11.75"/><path d="M11.5 7.75h3.75A1.25 1.25 0 0 1 16.5 9v6.5"/><path d="M2.75 16.5h14.5"/><path d="M6.25 6.5h2.5M6.25 9.5h2.5M6.25 12.5h2.5"/>',
     projects: '<path d="M2.75 6.25A1.5 1.5 0 0 1 4.25 4.75h2.9l1.6 2h7A1.5 1.5 0 0 1 17.25 8.25v6A1.5 1.5 0 0 1 15.75 15.75H4.25a1.5 1.5 0 0 1-1.5-1.5v-8Z"/>',
@@ -29,13 +30,13 @@
     ['self_evaluation', '自我评价'], ['application_answers', '网申问答'], ['custom_fields', '我加的项']
   ];
   var scalarFields = {
-    basic: [['name', '姓名'], ['gender', '性别'], ['birth_date', '出生日期', 'date'], ['age', '年龄'], ['ethnicity', '民族'], ['native_place', '籍贯'], ['political_status', '政治面貌'], ['marital_status', '婚姻状况'], ['household_registration', '户口所在地'], ['place_of_origin', '生源地'], ['current_residence', '现居住地'], ['mailing_address', '通信地址', 'wide'], ['phone', '联系电话'], ['phone_code', '手机类别'], ['email', '邮箱'], ['wechat', '微信'], ['qq', 'QQ'], ['id_type', '证件类型'], ['has_children', '有无子女'], ['emergency_contact', '紧急联系人'], ['emergency_phone', '紧急联系电话'], ['height', '身高（cm，只填数字）'], ['weight', '体重（kg，只填数字）']],
+    basic: [['name', '姓名'], ['gender', '性别'], ['birth_date', '出生日期', 'date'], ['age', '年龄'], ['work_start_date', '参加工作时间'], ['work_years', '工作经验'], ['ethnicity', '民族'], ['native_place', '籍贯'], ['political_status', '政治面貌'], ['marital_status', '婚姻状况'], ['household_registration', '户口所在地'], ['place_of_origin', '生源地'], ['current_residence', '现居住地'], ['mailing_address', '通信地址', 'wide'], ['phone', '联系电话'], ['phone_code', '手机区号 / 类别（如 +86 / 中国大陆）'], ['email', '邮箱'], ['wechat', '微信'], ['qq', 'QQ'], ['id_type', '证件类型'], ['id_number', '身份证号'], ['has_children', '有无子女'], ['emergency_contact', '紧急联系人'], ['emergency_phone', '紧急联系电话'], ['height', '身高（cm，只填数字）'], ['weight', '体重（kg，只填数字）']],
     intention: [['target_role', '期望职位'], ['industry', '期望行业', 'wide'], ['city', '期望城市'], ['salary', '期望薪资'], ['employment_type', '工作性质'], ['interview_site', '面试站点'], ['available_date', '可到岗时间']],
     additional: [['hobbies', '兴趣爱好', 'wide'], ['specialty', '特长', 'wide'], ['punishment', '受处分情况', 'wide'], ['academic_works', '学术专著', 'wide'], ['patents', '专利成果', 'wide'], ['law_violation', '违法违纪情况'], ['applied_subsidiary', '是否应聘过本公司'], ['relatives_in_company', '是否有亲友在本公司'], ['medical_history', '手术史或重大疾病史', 'wide'], ['referral_code', '推荐码']]
   };
   var recordFields = {
     education: [['school', '学校'], ['college', '学院'], ['start_date', '开始时间', 'period'], ['end_date', '结束时间', 'period'], ['duration_years', '学制（年）'], ['level', '学历'], ['admission_type', '招生类型'], ['study_mode', '学习形式'], ['graduate_type', '应届往届'], ['degree_certificate', '学位证'], ['degree_name', '学位名称'], ['major', '专业'], ['second_major', '第二专业'], ['major_category', '专业分类'], ['major_rank', '专业排名'], ['gpa', '绩点/均分'], ['english_level', '英语等级'], ['english_score', '英语等级成绩'], ['research_direction', '研究方向', 'wide'], ['advisor', '导师'], ['thesis_title', '毕业论文题目', 'full'], ['description', '教育经历描述', 'full']],
-    employment: [['employer', '单位'], ['role', '职位'], ['start_date', '开始时间', 'period'], ['end_date', '结束时间', 'period'], ['employer_type', '单位性质'], ['location', '工作地点'], ['project_name', '项目名称'], ['salary', '税前月薪'], ['description', '工作内容', 'full']],
+    employment: [['employer', '单位'], ['role', '职位'], ['start_date', '开始时间', 'period'], ['end_date', '结束时间', 'period'], ['employer_type', '单位性质'], ['location', '工作地点'], ['project_name', '项目名称'], ['salary', '税前月薪']],
     projects: [['name', '项目名称'], ['start_date', '开始时间', 'period'], ['end_date', '结束时间', 'period'], ['role', '担任角色'], ['organization', '项目单位'], ['participant_count', '参加人数'], ['research_direction', '研究方向', 'wide'], ['introduction', '项目介绍', 'full'], ['outcomes', '项目成果', 'full'], ['related_paper', '相关论文', 'wide']],
     honors: [['name', '荣誉名称'], ['date', '获得时间', 'period'], ['issuer', '颁发单位'], ['description', '说明', 'full']],
     activities: [['name', '活动名称'], ['start_date', '开始时间', 'period'], ['end_date', '结束时间', 'period'], ['role', '身份/角色'], ['organization', '组织'], ['description', '活动描述', 'full']],
@@ -140,6 +141,25 @@
     return true;
   }
 
+  var PRESET_FIELD_OPTIONS = {
+    gender: ['男', '女'],
+    phone_code: ['+86', '+852', '+853', '+886'],
+    id_type: ['身份证', '护照', '港澳居民来往内地通行证', '台湾居民来往大陆通行证', '其他'],
+    political_status: ['中共党员', '共青团员', '群众', '中共预备党员', '民主党派'],
+    marital_status: ['未婚', '已婚', '离异'],
+    has_children: ['无', '有'],
+    level: ['硕士研究生', '本科', '博士研究生', '专科'],
+    degree_certificate: ['硕士学位', '学士学位', '博士学位', '无'],
+    admission_type: ['普通统招', '推荐免试(保研)', '全国统考', '定向培养'],
+    study_mode: ['全日制', '非全日制'],
+    graduate_type: ['应届生', '往届生'],
+    english_level: ['大学英语六级(CET-6)', '大学英语四级(CET-4)', '专业八级(TEM-8)', '专业四级(TEM-4)', '雅思(IELTS)', '托福(TOEFL)', '无'],
+    employment_type: ['全职', '实习', '兼职'],
+    law_violation: ['无', '有'],
+    applied_subsidiary: ['否', '是'],
+    relatives_in_company: ['否', '是'],
+    medical_history: ['无', '有']
+  };
   function field(key, label, value, kind) {
     var wrapper = document.createElement('div'); wrapper.className = 'field ' + (kind === 'wide' ? 'wide' : kind === 'full' ? 'full' : '');
     var labelNode = document.createElement('label'); labelNode.textContent = label; labelNode.htmlFor = 'field-' + key;
@@ -152,8 +172,52 @@
       input.autocomplete = 'off';
       input.spellcheck = false;
     }
+    var fieldName = key.indexOf('-') >= 0 ? key.split('-').pop() : key;
+    if (fieldName === 'id_number') input.placeholder = '18位居民身份证号';
+    else if (fieldName === 'phone_code') input.placeholder = '+86';
+    else if (fieldName === 'phone' || fieldName === 'emergency_phone') input.placeholder = '11位手机号码';
+
     input.addEventListener('input', function () { wrapper.__onChange(input.value); }); wrapper.__onChange = function () {};
     wrapper.append(labelNode, input);
+
+    var presets = PRESET_FIELD_OPTIONS[fieldName];
+    if (presets && input.tagName.toLowerCase() === 'input') {
+      var datalistId = 'datalist-' + key.replace(/[^a-zA-Z0-9_-]/g, '_');
+      input.setAttribute('list', datalistId);
+      var datalist = document.createElement('datalist');
+      datalist.id = datalistId;
+      presets.forEach(function (opt) {
+        var option = document.createElement('option');
+        option.value = opt;
+        datalist.appendChild(option);
+      });
+      wrapper.appendChild(datalist);
+
+      var chipsWrap = document.createElement('div');
+      chipsWrap.className = 'field-chips';
+      var chips = presets.map(function (opt) {
+        var chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'field-chip';
+        chip.textContent = opt;
+        chip.addEventListener('click', function () {
+          input.value = opt;
+          wrapper.__onChange(opt);
+          updateChipsState();
+        });
+        chipsWrap.appendChild(chip);
+        return chip;
+      });
+      wrapper.appendChild(chipsWrap);
+
+      var updateChipsState = function () {
+        chips.forEach(function (chip) {
+          chip.classList.toggle('active', chip.textContent === input.value);
+        });
+      };
+      input.addEventListener('input', updateChipsState);
+      updateChipsState();
+    }
     if (kind === 'period') {
       var hint = document.createElement('small');
       hint.className = 'field-hint';

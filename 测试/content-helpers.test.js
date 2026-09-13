@@ -562,3 +562,133 @@ test('the shipped fillable template proposes nothing until the user fills it in'
   assert.deepEqual(profile.education, []);
 });
 
+
+test('matches a column whose wording carries its section prefix', () => {
+  // 国聘 qualifies its education columns with 最高学历. Stripping that as an extra variant
+  // reaches the plain alias without breaking a bare 最高学历, which means 学历.
+  const cases = [
+    ['education.1.school', '最高学历院校'],
+    ['education.1.end_date', '最高学历毕业时间'],
+    ['education.1.major_category', '最高学历专业分类'],
+    ['education.1.gpa', '最高学历平均绩点'],
+    ['education.1.study_mode', '最高学历全日制'],
+    ['education.1.admission_type', '最高学历统招'],
+    ['education.1.level', '最高学历']
+  ];
+  cases.forEach(([key, label]) => {
+    const item = { profileKey: key, label: key.split('.').pop(), value: 'x' };
+    assert.equal(Content.profileLabelStrength(item, label), 'exact', label + ' should reach ' + key);
+  });
+  assert.equal(Content.withoutLeadingQualifier('最高学历院校'), '院校');
+  assert.equal(Content.withoutLeadingQualifier('姓名'), '', 'a label with no qualifier strips to nothing');
+});
+
+test('does not let a latin alias match inside an identifier', () => {
+  // The scanner joins the visible label with the control's name and id. "gpa" sits inside
+  // "gpAbroad", "mail" inside "mailingAddress", "name" inside "companyName".
+  const composite = '最高学历海外留学 gpAbroad gp-abroad';
+  assert.equal(Content.profileLabelStrength({ profileKey: 'education.1.gpa', label: '绩点/均分', value: '3.8' }, composite), 'none');
+  assert.equal(Content.profileLabelStrength({ profileKey: 'basic.email', label: '邮箱', value: 'x' }, 'mailingAddress'), 'none');
+  assert.equal(Content.profileLabelStrength({ profileKey: 'basic.name', label: '姓名', value: 'x' }, 'companyName'), 'none');
+  // A latin alias on a real word boundary still matches, and Chinese is unaffected.
+  assert.notEqual(Content.profileLabelStrength({ profileKey: 'education.1.gpa', label: '绩点/均分', value: '3.8' }, 'gpa成绩'), 'none');
+  assert.equal(Content.profileLabelStrength({ profileKey: 'education.1.level', label: '学历', value: 'x' }, '最高学历'), 'exact');
+});
+
+test('prefers the stronger match over whichever candidate comes first', () => {
+  // 最高学历专业分类 is an exact alias hit for 专业分类 and only a substring hit for 专业.
+  // Profile order puts 专业 first, so ranking on strength is what keeps them apart.
+  const values = Content.flattenProfile({
+    education: [{ major: '电子信息', major_category: '电子信息' }]
+  });
+  const strongest = values
+    .map((item) => ({ item: item, strength: Content.profileLabelStrength(item, '最高学历专业分类') }))
+    .filter((entry) => entry.strength !== 'none');
+  assert.ok(strongest.length > 0);
+  const majors = strongest.filter((entry) => entry.strength === 'exact').map((entry) => entry.item.profileKey);
+  assert.deepEqual(majors, ['education.1.major_category']);
+});
+
+test('matches id_number and phone_code aliases on recruitment forms', () => {
+  const cases = [
+    ['basic.id_number', '身份证号'],
+    ['basic.id_number', '身份证号码'],
+    ['basic.id_number', '证件号码'],
+    ['basic.id_number', '公民身份号码'],
+    ['basic.phone_code', '手机区号'],
+    ['basic.phone_code', '电话区号'],
+    ['basic.phone_code', '国家/地区代码']
+  ];
+  cases.forEach(([key, label]) => {
+    const item = { profileKey: key, label: key.split('.').pop(), value: 'x' };
+    assert.equal(Content.profileLabelStrength(item, label), 'exact', label + ' should reach ' + key);
+  });
+});
+
+test('semantically matches dropdown options across synonymous formats', () => {
+  const englishOptions = [
+    { value: '', text: '请选择英语等级' },
+    { value: '1', text: 'CET-4 / 英语四级' },
+    { value: '2', text: 'CET-6 / 英语六级' },
+    { value: '3', text: 'TEM-8 / 专八' }
+  ];
+  assert.equal(Content.matchSelectOption(englishOptions, '大学英语六级(CET-6)'), 2);
+  assert.equal(Content.matchSelectOption(englishOptions, 'CET6'), 2);
+  assert.equal(Content.matchSelectOption(englishOptions, '英语六级'), 2);
+
+  const genderOptions = [
+    { value: '', text: '请选择性别' },
+    { value: 'M', text: '男性' },
+    { value: 'F', text: '女性' }
+  ];
+  assert.equal(Content.matchSelectOption(genderOptions, '男'), 1);
+  assert.equal(Content.matchSelectOption(genderOptions, '女'), 2);
+
+  const eduOptions = [
+    { value: '0', text: '专科' },
+    { value: '1', text: '本科' },
+    { value: '2', text: '硕士' },
+    { value: '3', text: '博士' }
+  ];
+  assert.equal(Content.matchSelectOption(eduOptions, '硕士研究生'), 2);
+  assert.equal(Content.matchSelectOption(eduOptions, '大学本科'), 1);
+
+  const idOptions = [
+    { value: '1', text: '居民身份证' },
+    { value: '2', text: '中国护照' }
+  ];
+  assert.equal(Content.matchSelectOption(idOptions, '身份证'), 0);
+
+  const phoneCodeOptions = [
+    { value: '+86', text: '中国大陆 (+86)' },
+    { value: '+852', text: '中国香港 (+852)' }
+  ];
+  assert.equal(Content.matchSelectOption(phoneCodeOptions, '+86'), 0);
+  assert.equal(Content.matchSelectOption(phoneCodeOptions, '86'), 0);
+});
+
+test('every name shown in the UI is a name the matcher accepts', () => {
+  // The quick-copy list and the assignment picker both print the label from ASSIGNABLE_FIELDS.
+  // If one of those labels stops resolving, users see a field名 that looks right but never
+  // matches anything. This is the guard against the label tables drifting apart again.
+  const ResumeProfile = require('../profile-parser.js');
+  const failures = [];
+  ResumeProfile.ASSIGNABLE_FIELDS.forEach((group) => {
+    group.fields.forEach((meta) => {
+      const key = group.single
+        ? group.section
+        : group.scalar ? group.section + '.' + meta[0] : group.section + '.1.' + meta[0];
+      const strength = Content.profileLabelStrength({ profileKey: key, label: meta[1], value: 'x' }, meta[1]);
+      if (strength === 'none') failures.push(group.section + '.' + meta[0] + ' (' + meta[1] + ')');
+    });
+  });
+  assert.deepEqual(failures, [], 'these labels are printed in the UI but match nothing');
+});
+
+test('the quick copy list is built from the catalog, not a second label table', () => {
+  const source = require('fs').readFileSync(require('path').join(__dirname, '..', 'popup.js'), 'utf8');
+  assert.ok(source.includes('ResumeProfile.ASSIGNABLE_FIELDS.forEach'), 'the quick copy list should read the shared catalog');
+  // The hand-written tables that used to duplicate the schema labels.
+  assert.ok(!/basicLabels\s*=/.test(source), 'popup.js should not carry its own basic label table');
+  assert.ok(!/intentionLabels\s*=/.test(source), 'popup.js should not carry its own intention label table');
+});

@@ -8,79 +8,168 @@
   <link rel="stylesheet" href="../popup.css">
 </head>
 <body>
-  <main>
-    <header>
-      <div>
-        <h1>简历填充助手</h1>
-        <p>点一下才会读这一页，不会替你提交。</p>
+  <main class="popup-container">
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <path d="M14 2v6h6"/>
+            <path d="M16 13H8"/>
+            <path d="M16 17H8"/>
+            <path d="M10 9H8"/>
+          </svg>
+        </div>
+        <div class="brand-info">
+          <div class="brand-title-row">
+            <h1>简历填充助手</h1>
+            <span class="safe-badge">本地离线</span>
+          </div>
+          <p class="brand-subtitle">用户触发扫描 · 绝不自动提交</p>
+        </div>
       </div>
-      <button id="openOptions" class="icon-button" type="button" title="打开资料设置" aria-label="打开资料设置">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
-          <path d="M3 7h3.4M11.6 7H21"/><circle cx="9" cy="7" r="2.6"/>
-          <path d="M3 12h9.4M17.6 12H21"/><circle cx="15" cy="12" r="2.6"/>
-          <path d="M3 17h2.4M10.6 17H21"/><circle cx="8" cy="17" r="2.6"/>
-        </svg>
-      </button>
+      <div class="header-actions">
+        <button id="importProfile" class="icon-button" type="button" title="导入简历资料 (.txt)" aria-label="导入资料">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 15V3"/><path d="M8 7l4-4 4 4"/>
+            <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+          </svg>
+        </button>
+        <button id="exportProfile" class="icon-button" type="button" title="导出当前资料 (.txt)" aria-label="导出资料">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3v12"/><path d="M8 11l4 4 4-4"/>
+            <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+          </svg>
+        </button>
+        <button id="openOptions" class="icon-button" type="button" title="打开资料编辑器" aria-label="打开资料设置">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+        <input id="fileInput" type="file" accept=".txt,text/plain" hidden>
+      </div>
     </header>
 
-    <section class="toolbar" aria-label="资料操作">
-      <button id="importProfile" type="button">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M12 15V4"/><path d="M8.5 7.5 12 4l3.5 3.5"/>
-          <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>
+    <!-- 顶部主导航 -->
+    <nav class="popup-nav" role="tablist" aria-label="功能导航">
+      <button type="button" id="tabNavFill" class="nav-tab active" role="tab" aria-selected="true" aria-controls="tabFillPanel">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
         </svg>
-        导入资料
+        智能填写
       </button>
-      <button id="exportProfile" type="button">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M12 4v11"/><path d="M8.5 11.5 12 15l3.5-3.5"/>
-          <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>
+      <button type="button" id="tabNavQuickCopy" class="nav-tab" role="tab" aria-selected="false" aria-controls="tabQuickCopyPanel">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
         </svg>
-        导出资料
+        资料速查
       </button>
-      <input id="fileInput" type="file" accept=".txt,text/plain" hidden>
-    </section>
+    </nav>
 
-    <section class="scan-panel">
-      <button id="scanPage" class="primary" type="button">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
-          <circle cx="10.5" cy="10.5" r="6.2"/><path d="M15.2 15.2 20.5 20.5"/>
-        </svg>
-        看看这页要填什么
-      </button>
-      <div id="profileStatus" class="status" role="status" aria-live="polite">正在读取你的资料…</div>
-    </section>
+    <!-- Tab 1: 扫描与表单填充面板 -->
+    <div id="tabFillPanel" class="tab-panel active" role="tabpanel">
+      <!-- 扫描触发卡片 -->
+      <section class="scan-panel">
+        <div class="scan-action-wrap">
+          <button id="scanPage" class="primary scan-main-btn" type="button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7"/>
+              <path d="m21 21-4.35-4.35"/>
+            </svg>
+            看看这页要填什么
+          </button>
+        </div>
+        <div id="profileStatus" class="status info-status" role="status" aria-live="polite">正在读取你的资料…</div>
+      </section>
 
-    <section id="review" hidden>
-      <div class="review-heading">
-        <h2>这一页要填的地方</h2>
-        <span id="candidateCount"></span>
+      <!-- 审查与确认区域 -->
+      <section id="review" class="review-panel" hidden>
+        <div class="review-heading">
+          <div class="heading-title-row">
+            <h2>这一页要填的地方</h2>
+            <span id="candidateCount" class="count-badge">0 处</span>
+          </div>
+          <div class="heading-controls">
+            <button type="button" id="quickLocateAll" class="mini-text-btn" title="在页面高亮所有输入框">高亮提示</button>
+          </div>
+        </div>
+
+        <!-- 状态过滤器 -->
+        <div class="filter-bar" role="radiogroup" aria-label="筛选候选字段">
+          <button type="button" class="filter-pill active" data-filter="all">全部</button>
+          <button type="button" class="filter-pill" data-filter="matched">已对上</button>
+          <button type="button" class="filter-pill" data-filter="confirm">待确认</button>
+          <button type="button" class="filter-pill" data-filter="missing">未匹配</button>
+        </div>
+
+        <!-- 批量操作控制行 -->
+        <div class="batch-bar">
+          <label class="batch-select-label" title="全选或取消勾选当前列表字段">
+            <input type="checkbox" id="selectAllCandidates" checked>
+            <span>全选当前 (<span id="visibleSelectedCount">0</span>/<span id="visibleTotalCount">0</span>)</span>
+          </label>
+          <div class="batch-actions">
+            <button type="button" id="selectHighOnly" class="mini-btn" title="仅勾选已精确匹配的项目">仅选已匹配</button>
+            <button type="button" id="clearAllSelected" class="mini-btn" title="取消勾选所有项">全不选</button>
+          </div>
+        </div>
+
+        <!-- 候选列表容器 -->
+        <div id="candidateList" class="candidate-list"></div>
+
+        <!-- 底部吸附操作栏 -->
+        <div class="review-footer">
+          <button id="saveNewFields" class="secondary-btn" type="button">记住这一项</button>
+          <button id="fillConfirmed" class="primary fill-btn" type="button" disabled>帮我填上</button>
+          <div id="result" class="status result-status" aria-live="polite"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Tab 2: 资料速查面板 (应急与手动辅助) -->
+    <div id="tabQuickCopyPanel" class="tab-panel" role="tabpanel" hidden>
+      <div class="quick-copy-header">
+        <div class="search-input-wrap">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="search-icon" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input type="text" id="quickSearchInput" placeholder="搜索简历字段（如：姓名、学校、电话...）" autocomplete="off">
+          <button type="button" id="quickSearchClear" class="search-clear-btn" title="清除" hidden>×</button>
+        </div>
+        <p class="quick-copy-tip">遇到跨域 iframe 或特殊输入框？点击卡片右侧一键复制到剪贴板：</p>
       </div>
-      <div id="candidateList" class="candidate-list"></div>
-      <button id="saveNewFields" type="button">记住这一项</button>
-      <button id="fillConfirmed" class="primary" type="button" disabled>帮我填上</button>
-      <div id="result" class="status" aria-live="polite"></div>
-    </section>
+      <div id="quickCopyList" class="quick-copy-list"></div>
+    </div>
   </main>
+
   <script>
     var CANDIDATES = [{
       label: '学习经历', profileKey: null, proposedValue: '', confidence: 'none',
       currentValue: '', selected: false, isNewField: true, sensitive: false,
       remember: false, customKey: '', customLabel: '学习经历', customCategory: '自己加的',
       fingerprint: 'text:studyexp', controlType: 'input', siteKey: 'https://example.com'
+    }, {
+      // Scans as an ordinary high-confidence match, but it is sensitive, so it must not be
+      // ticked for the applicant.
+      label: '身份证号', profileKey: 'basic.id_number', proposedValue: '210000200001010000',
+      confidence: 'high', currentValue: '', selected: false, isNewField: false,
+      sensitive: true, remember: false, fingerprint: 'text:idnumber',
+      controlType: 'input', siteKey: 'https://example.com'
     }];
     window.__saved = null;
     window.__filled = null;
     window.chrome = {
-      runtime: { lastError: null, getManifest: function () { return { version: '0.2.0' }; }, openOptionsPage: function () {} },
+      runtime: { lastError: null, getManifest: function () { return { version: '0.3.0' }; }, openOptionsPage: function () {} },
       storage: { local: {
-        get: function (defaults, callback) { callback({ resumeProfile: { education: [{ school: '示例大学', major: '电子信息' }] }, resumeAccent: '#0078d4' }); },
+        get: function (defaults, callback) { callback({ resumeProfile: { basic: { name: '示例姓名', id_number: '210000200001010000' }, education: [{ school: '示例大学', major: '电子信息', courses: ['电路原理'] }], additional: { specialty: '长跑', hobbies: '摄影' } }, resumeAccent: '#0078d4' }); },
         set: function (value, callback) { window.__saved = value; if (callback) callback(); }
       } },
       tabs: {
         query: function (query, callback) { callback([{ id: 1, url: 'https://example.com/apply' }]); },
         sendMessage: function (tabId, message, callback) {
-          if (message.type === 'ping') return callback({ version: '0.2.0' });
+          if (message.type === 'ping') return callback({ version: '0.3.0' });
           if (message.type === 'scan') return callback({ candidates: CANDIDATES });
           if (message.type === 'fill') { window.__filled = message.fields; return callback({ results: [{ id: 'x', status: 'filled' }] }); }
           callback({ results: [] });
@@ -114,6 +203,20 @@
       document.getElementById('scanPage').click();
       setTimeout(function () {
         steps.push(snapshot('after scan'));
+        // The sensitive row must arrive unticked but still tickable.
+        var sensitiveRow = document.querySelectorAll('.candidate')[1];
+        var sensitiveBox = sensitiveRow ? sensitiveRow.querySelector('input[type=checkbox]') : null;
+        steps.push({
+          stage: 'sensitive row after scan',
+          badge: sensitiveRow ? sensitiveRow.querySelector('.confidence').textContent : null,
+          checked: sensitiveBox ? sensitiveBox.checked : null,
+          disabled: sensitiveBox ? sensitiveBox.disabled : null
+        });
+        if (sensitiveBox) {
+          sensitiveBox.checked = true;
+          sensitiveBox.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        steps.push(snapshot('after ticking the sensitive row'));
         var box = document.querySelector('.candidate input[type=checkbox]');
         box.checked = true; box.dispatchEvent(new Event('change', { bubbles: true }));
         steps.push(snapshot('after ticking the box'));
@@ -127,7 +230,19 @@
           setTimeout(function () {
             steps.push({ stage: 'fill payload', fields: (window.__filled || []).map(function (f) { return { label: f.label, profileKey: f.profileKey, value: f.proposedValue }; }) });
             steps.push({ stage: 'stored label_mappings', mappings: ((window.__saved || {}).resumeProfile || {}).label_mappings });
-            document.getElementById('smoke-result').textContent = JSON.stringify(steps);
+            document.getElementById('tabNavQuickCopy').click();
+            setTimeout(function () {
+              var cards = Array.prototype.slice.call(document.querySelectorAll('#quickCopyList .copy-card-title'));
+              var titles = cards.map(function (el) { return el.textContent; });
+              steps.push({
+                stage: 'quick copy',
+                count: cards.length,
+                coversAdditional: titles.some(function (t) { return t.indexOf('特长') >= 0; }),
+                coversIdNumber: titles.some(function (t) { return t.indexOf('身份证号') >= 0; }),
+                coversCourses: titles.some(function (t) { return t.indexOf('所学课程') >= 0; })
+              });
+              document.getElementById('smoke-result').textContent = JSON.stringify(steps);
+            }, 60);
           }, 150);
         }, 150);
       }, 80);

@@ -31,6 +31,10 @@ gender=
 birth_date=
 # 年龄：只填数字
 age=
+# 参加工作时间：格式 2023-07
+work_start_date=
+# 工作经验 / 工作年限，例如 3年 或 应届生
+work_years=
 # 民族，例如 汉族
 ethnicity=
 # 籍贯，例如 北京市朝阳区
@@ -49,7 +53,7 @@ current_residence=
 mailing_address=
 # 联系电话 / 手机号
 phone=
-# 手机类别 / 国际区号，例如 +86
+# 手机区号 / 类别（国际区号，例如 +86）
 phone_code=
 # 电子邮箱
 email=
@@ -57,8 +61,10 @@ email=
 wechat=
 # QQ 号
 qq=
-# 证件类型，例如 身份证 / 护照。证件号码插件不保存也不填，不用写
+# 证件类型，例如 身份证 / 护照
 id_type=
+# 身份证号 / 证件号码（18位居民身份证号）
+id_number=
 # 有无子女：有 或 无
 has_children=
 # 紧急联系人姓名

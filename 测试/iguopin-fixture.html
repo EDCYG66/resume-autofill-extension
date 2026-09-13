@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+<body>
+  <!-- Labels copied from 国聘 (iguopin.com) resume form: the site prefixes every education
+       column with 最高学历, which is the pattern that breaks alias matching. -->
+  <form id="iguopin-fixture">
+    <label for="g-name">姓名</label><input id="g-name" name="name">
+    <label for="g-sex">性别</label><input id="g-sex" name="sex">
+    <label for="g-birth">出生日期</label><input id="g-birth" name="birthday">
+    <label for="g-live">现居住地</label><input id="g-live" name="liveCity">
+    <label for="g-origin">生源地</label><input id="g-origin" name="origin">
+    <label for="g-workdate">参加工作时间</label><input id="g-workdate" name="workDate">
+    <label for="g-exprole">期望职位</label><input id="g-exprole" name="expectJob">
+    <label for="g-expcity">期望工作地点</label><input id="g-expcity" name="expectCity">
+    <label for="g-expind">期望行业</label><input id="g-expind" name="expectIndustry">
+    <label for="g-expsal">期望薪资要求</label><input id="g-expsal" name="expectSalary">
+
+    <label for="g-edu">最高学历</label><input id="g-edu" name="topEdu">
+    <label for="g-edudate">最高学历毕业时间</label><input id="g-edudate" name="topEduDate">
+    <label for="g-eduschool">最高学历院校</label><input id="g-eduschool" name="topEduSchool">
+    <label for="g-edumajor">最高学历专业分类</label><input id="g-edumajor" name="topEduMajor">
+    <label for="g-edufull">最高学历全日制</label><input id="g-edufull" name="topEduFull">
+    <label for="g-edutongzhao">最高学历统招</label><input id="g-edutongzhao" name="topEduTongzhao">
+    <label for="g-eduabroad">最高学历海外留学</label><input id="g-eduabroad" name="topEduAbroad">
+
+    <button type="submit">保存</button>
+  </form>
+  <pre id="result"></pre>
+  <script src="../content.js"></script>
+  <script>
+    window.submitAttempts = 0;
+    document.querySelector('#iguopin-fixture').addEventListener('submit', function (e) {
+      e.preventDefault(); window.submitAttempts += 1;
+    });
+    // A fully populated profile: every one of these should land in its own column.
+    var profile = {
+      basic: {
+        name: '示例姓名', gender: '男', birth_date: '2001-06-03',
+        current_residence: '示例城市', place_of_origin: '示例省份'
+      },
+      intention: {
+        target_role: '工艺工程师', city: '示例城市', industry: '电子半导体',
+        salary: '8000', interview_site: '示例城市'
+      },
+      education: [{
+        level: '硕士', school: '示例大学', major_category: '电子信息',
+        end_date: '2027-06', study_mode: '全日制', admission_type: '统招'
+      }]
+    };
+    var candidates = ResumeContent.scan(profile, { siteKey: 'file://iguopin' });
+    var cells = candidates.map(function (c) {
+      return {
+        label: c.label, key: c.profileKey, proposed: c.proposedValue,
+        conf: c.confidence, isNew: Boolean(c.isNewField), type: c.controlType
+      };
+    });
+    var fillable = candidates.filter(function (c) { return c.proposedValue && !c.isNewField; });
+    ResumeContent.fill(fillable).then(function () {
+      var state = {};
+      document.querySelectorAll('#iguopin-fixture [name]').forEach(function (el) {
+        state[el.getAttribute('name')] = el.value;
+      });
+      state.submitAttempts = window.submitAttempts;
+      document.querySelector('#result').textContent = JSON.stringify({ cells: cells, state: state });
+    });
+  </script>
+</body>
+</html>

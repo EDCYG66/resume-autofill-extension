@@ -27,3 +27,11 @@ tmp/
 /测试/browser.local.txt
 # Smoke-test scratch space: browser profiles, dumped DOM and captured stderr.
 /测试/输出/
+/tools/__pycache__/
+
+# Raw captures of other companies' pages and front-end bundles, kept only while transcribing a
+# site's column wording. They are third-party code and run to several megabytes, so they do not
+# belong in the repository. The small derived lists beside them do: iguopin-labels.txt,
+# misses.txt and profile-keys.json are what the transcription actually produced.
+/测试/抓取/*.html
+/测试/抓取/*.js

@@ -29,6 +29,7 @@ foreach ($name in $required) {
 
 $manifest = Get-Content -Raw -LiteralPath (Join-Path $root 'manifest.json') | ConvertFrom-Json
 if ($manifest.manifest_version -ne 3) { throw 'Manifest is not MV3' }
+if ($manifest.version -ne '0.3.0') { throw "Expected release version 0.3.0, found $($manifest.version)" }
 $actualPermissions = @($manifest.permissions | Sort-Object)
 $expectedPermissions = @('activeTab','scripting','storage')
 if (($actualPermissions -join ',') -ne (($expectedPermissions | Sort-Object) -join ',')) { throw "Unexpected permissions: $($actualPermissions -join ',')" }
@@ -152,9 +153,13 @@ if (Test-Path -LiteralPath $personalFile) {
     $relative = $file.FullName.Substring($root.Length + 1)
     $pathspec = $relative -replace '\\','/'
     if (Test-Path -LiteralPath (Join-Path $root '.git')) {
-      # Anything git ignores never ships, so it is not a leak.
+      # Anything git ignores never ships, so it is not a leak. check-ignore exits 1 for a path
+      # that is not ignored, so record the answer and clear the code: otherwise the script
+      # finishes with $LASTEXITCODE = 1 and callers read a clean run as a failure.
       & git -C $root check-ignore --quiet -- $pathspec
-      if ($LASTEXITCODE -eq 0) { continue }
+      $isIgnored = ($LASTEXITCODE -eq 0)
+      $global:LASTEXITCODE = 0
+      if ($isIgnored) { continue }
     }
     $text = Get-Content -Raw -LiteralPath $file.FullName
     foreach ($secret in $personalValues + @('身份证正面','身份证反面')) {

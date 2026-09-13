@@ -6,12 +6,14 @@ against a stale page while the shipped one has moved on. Run this after editing 
 Run:  python tools/make_popup_fixture.py
 """
 import io
+import json
 import os
 import re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOURCE = os.path.join(ROOT, 'popup.html')
 TARGET = os.path.join(ROOT, '测试', 'popup-fixture.html')
+MANIFEST = os.path.join(ROOT, 'manifest.json')
 
 MOCK = """  <script>
     var CANDIDATES = [{
@@ -19,19 +21,26 @@ MOCK = """  <script>
       currentValue: '', selected: false, isNewField: true, sensitive: false,
       remember: false, customKey: '', customLabel: '学习经历', customCategory: '自己加的',
       fingerprint: 'text:studyexp', controlType: 'input', siteKey: 'https://example.com'
+    }, {
+      // Scans as an ordinary high-confidence match, but it is sensitive, so it must not be
+      // ticked for the applicant.
+      label: '身份证号', profileKey: 'basic.id_number', proposedValue: '210000200001010000',
+      confidence: 'high', currentValue: '', selected: false, isNewField: false,
+      sensitive: true, remember: false, fingerprint: 'text:idnumber',
+      controlType: 'input', siteKey: 'https://example.com'
     }];
     window.__saved = null;
     window.__filled = null;
     window.chrome = {
-      runtime: { lastError: null, getManifest: function () { return { version: '0.2.0' }; }, openOptionsPage: function () {} },
+      runtime: { lastError: null, getManifest: function () { return { version: '__VERSION__' }; }, openOptionsPage: function () {} },
       storage: { local: {
-        get: function (defaults, callback) { callback({ resumeProfile: { education: [{ school: '示例大学', major: '电子信息' }] }, resumeAccent: '#0078d4' }); },
+        get: function (defaults, callback) { callback({ resumeProfile: { basic: { name: '示例姓名', id_number: '210000200001010000' }, education: [{ school: '示例大学', major: '电子信息', courses: ['电路原理'] }], additional: { specialty: '长跑', hobbies: '摄影' } }, resumeAccent: '#0078d4' }); },
         set: function (value, callback) { window.__saved = value; if (callback) callback(); }
       } },
       tabs: {
         query: function (query, callback) { callback([{ id: 1, url: 'https://example.com/apply' }]); },
         sendMessage: function (tabId, message, callback) {
-          if (message.type === 'ping') return callback({ version: '0.2.0' });
+          if (message.type === 'ping') return callback({ version: '__VERSION__' });
           if (message.type === 'scan') return callback({ candidates: CANDIDATES });
           if (message.type === 'fill') { window.__filled = message.fields; return callback({ results: [{ id: 'x', status: 'filled' }] }); }
           callback({ results: [] });
@@ -64,6 +73,20 @@ DRIVER = """  <script>
       document.getElementById('scanPage').click();
       setTimeout(function () {
         steps.push(snapshot('after scan'));
+        // The sensitive row must arrive unticked but still tickable.
+        var sensitiveRow = document.querySelectorAll('.candidate')[1];
+        var sensitiveBox = sensitiveRow ? sensitiveRow.querySelector('input[type=checkbox]') : null;
+        steps.push({
+          stage: 'sensitive row after scan',
+          badge: sensitiveRow ? sensitiveRow.querySelector('.confidence').textContent : null,
+          checked: sensitiveBox ? sensitiveBox.checked : null,
+          disabled: sensitiveBox ? sensitiveBox.disabled : null
+        });
+        if (sensitiveBox) {
+          sensitiveBox.checked = true;
+          sensitiveBox.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        steps.push(snapshot('after ticking the sensitive row'));
         var box = document.querySelector('.candidate input[type=checkbox]');
         box.checked = true; box.dispatchEvent(new Event('change', { bubbles: true }));
         steps.push(snapshot('after ticking the box'));
@@ -77,7 +100,19 @@ DRIVER = """  <script>
           setTimeout(function () {
             steps.push({ stage: 'fill payload', fields: (window.__filled || []).map(function (f) { return { label: f.label, profileKey: f.profileKey, value: f.proposedValue }; }) });
             steps.push({ stage: 'stored label_mappings', mappings: ((window.__saved || {}).resumeProfile || {}).label_mappings });
-            document.getElementById('smoke-result').textContent = JSON.stringify(steps);
+            document.getElementById('tabNavQuickCopy').click();
+            setTimeout(function () {
+              var cards = Array.prototype.slice.call(document.querySelectorAll('#quickCopyList .copy-card-title'));
+              var titles = cards.map(function (el) { return el.textContent; });
+              steps.push({
+                stage: 'quick copy',
+                count: cards.length,
+                coversAdditional: titles.some(function (t) { return t.indexOf('特长') >= 0; }),
+                coversIdNumber: titles.some(function (t) { return t.indexOf('身份证号') >= 0; }),
+                coversCourses: titles.some(function (t) { return t.indexOf('所学课程') >= 0; })
+              });
+              document.getElementById('smoke-result').textContent = JSON.stringify(steps);
+            }, 60);
           }, 150);
         }, 150);
       }, 80);
@@ -88,11 +123,13 @@ DRIVER = """  <script>
 
 def build():
     html = io.open(SOURCE, encoding='utf-8').read()
+    version = json.load(io.open(MANIFEST, encoding='utf-8'))['version']
     html = html.replace('<title>简历填充助手</title>',
                         '<title>popup fixture (generated from popup.html)</title>')
     html = html.replace('href="tokens.css"', 'href="../tokens.css"')
     html = html.replace('href="popup.css"', 'href="../popup.css"')
-    html = html.replace('  <script src="profile-parser.js"></script>', MOCK + '  <script src="../profile-parser.js"></script>')
+    mock = MOCK.replace('__VERSION__', version)
+    html = html.replace('  <script src="profile-parser.js"></script>', mock + '  <script src="../profile-parser.js"></script>')
     html = html.replace('  <script src="popup.js"></script>', '  <script src="../popup.js"></script>')
     html = html.replace('</body>', '  <pre id="smoke-result"></pre>\n' + DRIVER + '</body>')
     io.open(TARGET, 'w', encoding='utf-8', newline='').write(html)
