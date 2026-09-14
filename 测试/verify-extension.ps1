@@ -21,7 +21,8 @@ $required = @(
   '测试/browser.ps1','测试/frame-fixture.html','测试/frame-inner.html','测试/frame-smoke.ps1',
   '测试/load-smoke.ps1','测试/popup-fixture.html','测试/popup-smoke.ps1','测试/appform-fixture.html',
   '测试/appform-smoke.ps1','测试/dynamic-fixture.html','测试/dynamic-smoke.ps1','测试/pack-smoke.ps1',
-  '测试/shared.test.js','测试/shadow-fixture.html','测试/shadow-smoke.ps1'
+  '测试/shared.test.js','测试/shadow-fixture.html','测试/shadow-smoke.ps1',
+  '测试/phoenix-fixture.html','测试/phoenix-smoke.ps1'
 )
 foreach ($name in $required) {
   $path = Join-Path $root $name
@@ -30,7 +31,7 @@ foreach ($name in $required) {
 
 $manifest = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $root 'manifest.json') | ConvertFrom-Json
 if ($manifest.manifest_version -ne 3) { throw 'Manifest is not MV3' }
-if ($manifest.version -ne '0.3.2') { throw "Expected release version 0.3.2, found $($manifest.version)" }
+ if ($manifest.version -ne '0.3.3') { throw "Expected release version 0.3.3, found $($manifest.version)" }
 $actualPermissions = @($manifest.permissions | Sort-Object)
 $expectedPermissions = @('activeTab','scripting','storage')
 if (($actualPermissions -join ',') -ne (($expectedPermissions | Sort-Object) -join ',')) { throw "Unexpected permissions: $($actualPermissions -join ',')" }

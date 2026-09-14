@@ -162,7 +162,7 @@
     window.__lastScan = null;
     window.__filled = null;
     window.chrome = {
-      runtime: { lastError: null, getManifest: function () { return { version: '0.3.2' }; }, openOptionsPage: function () {} },
+      runtime: { lastError: null, getManifest: function () { return { version: '0.3.3' }; }, openOptionsPage: function () {} },
       storage: { local: {
         get: function (defaults, callback) { callback({ resumeProfile: { basic: { name: '示例姓名', id_number: '210000200001010000' }, education: [{ school: '示例大学', major: '电子信息', courses: ['电路原理'] }], additional: { specialty: '长跑', hobbies: '摄影' } }, resumeAccent: '#0078d4', resumeLastScan: null }); },
         set: function (value, callback) { if (value.resumeLastScan) window.__lastScan = value.resumeLastScan; else window.__saved = value; if (callback) callback(); }
@@ -170,7 +170,7 @@
       tabs: {
         query: function (query, callback) { callback([{ id: 1, url: 'https://example.com/apply' }]); },
         sendMessage: function (tabId, message, callback) {
-          if (message.type === 'ping') return callback({ version: '0.3.2' });
+          if (message.type === 'ping') return callback({ version: '0.3.3' });
           if (message.type === 'scan') return callback({ candidates: CANDIDATES });
           if (message.type === 'fill') { window.__filled = message.fields; return callback({ results: [{ id: 'x', status: 'filled' }] }); }
           callback({ results: [] });

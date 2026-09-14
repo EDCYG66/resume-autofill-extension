@@ -235,7 +235,7 @@
   // Select components name their root after the library, and each library lays its own popup
   // out differently. Listing the roots here is what gets a site-specific dropdown scanned;
   // the class has to be its own token, so "selected-item" never counts as a select.
-  var CUSTOM_SELECT_CLASS_RE = /(^|[\s_-])(el-select|ant-select|ivu-select|select2-selection|n-select|n-base-selection|arco-select|t-select|semi-select|next-select|v-select)([\s_-]|$)/;
+  var CUSTOM_SELECT_CLASS_RE = /(^|[\s_-])(el-select|ant-select|ivu-select|select2-selection|n-select|n-base-selection|arco-select|t-select|semi-select|next-select|v-select|phoenix-select)([\s_-]|$)/;
   function isCustomSelectControl(element) {
     if (!element) return false;
     var role = normalizeText(element.role || (element.getAttribute && element.getAttribute('role')));
@@ -273,7 +273,7 @@
     var text = cleanFieldLabel(value);
     return ['应聘渠道', '个人基本信息', '求职意向', '教育经历', '英语能力', '其他外语能力', '计算机技能', '专业技能', '实习经历', '获奖或社团职务', '专利', '自我评价'].indexOf(text) >= 0;
   }
-  function preferredContainerSelectors() { return ['.resume-operation-wrap .form-cell', '.resume-operation-wrap .form-cell-right', '.ant-form-item', '.el-form-item']; }
+  function preferredContainerSelectors() { return ['.resume-operation-wrap .form-cell', '.resume-operation-wrap .form-cell-right', '.ant-form-item', '.el-form-item', '.form-item--phoenix', '.form-item']; }
   function nearestResumeContainer(element) {
     if (!element) return null;
     var selectors = preferredContainerSelectors();
@@ -291,7 +291,7 @@
     if (!container || !container.querySelector) return '';
     var item = element && element.closest ? element.closest('.ant-form-item, .el-form-item') : null;
     var root = item || container;
-    var labelSelectors = ['.ant-form-item-label', '.el-form-item__label', 'label', '.form-label', '[class*="label"]'];
+    var labelSelectors = ['.ant-form-item-label', '.el-form-item__label', '.form-item__text', 'label', '.form-label', '[class*="label"]'];
     for (var i = 0; i < labelSelectors.length; i++) {
       var label = root.querySelector(labelSelectors[i]);
       var value = cleanFieldLabel(textOf(label));
@@ -446,7 +446,14 @@
   }
   function queryControls(root) {
     if (!root || !root.querySelectorAll) return [];
-    return Array.prototype.slice.call(root.querySelectorAll(CONTROL_SELECTOR));
+    var controls = Array.prototype.slice.call(root.querySelectorAll(CONTROL_SELECTOR));
+    // A div-based radio group carries no input at all (the library draws the circles itself), so
+    // the group has to be scanned as the control. Groups that do have native inputs stay out:
+    // those inputs are already in the list above and the native path fills them.
+    Array.prototype.slice.call(root.querySelectorAll(CUSTOM_CHOICE_GROUP_SELECTOR)).forEach(function (group) {
+      if (isCustomChoiceGroup(group)) controls.push(group);
+    });
+    return controls;
   }
   function controlSelector() { return CONTROL_SELECTOR; }
   function allControls() {
@@ -935,6 +942,100 @@
     }
     return items;
   }
+  // Some libraries draw the radio circles and checkbox squares themselves and keep the state in a
+  // class, with no input anywhere for a scan to find. The group is then the control and its option
+  // rows are the elements to click.
+  // Token matches, not substrings: phoenix-radio-group__radioItem contains "radio-group" and would
+  // otherwise be taken for a group of its own, adding a duplicate candidate per option.
+  var CUSTOM_CHOICE_GROUP_SELECTOR = '[class~="phoenix-radio-group"], [class~="phoenix-checkbox-group"], [class~="radio-group"], [class~="checkbox-group"], [role="radiogroup"]';
+  var CUSTOM_CHOICE_OPTION_SELECTOR = '[class~="phoenix-radio"], [class~="phoenix-checkbox"], [role="radio"], [role="checkbox"]';
+  var CUSTOM_CHOICE_CHECKED_RE = /(^|[\s_-])(is-)?checked($|[\s_-])/;
+  function customChoiceRows(group) {
+    if (!group || !group.querySelectorAll) return [];
+    return Array.prototype.slice.call(group.querySelectorAll(CUSTOM_CHOICE_OPTION_SELECTOR))
+      .filter(function (row) { return !row.querySelector(CUSTOM_CHOICE_OPTION_SELECTOR); })
+      // A nested group is a control of its own. Without this, an outer group would collect the rows
+      // of every question inside it and read them as one field's options.
+      // A nested group is a control of its own. The look-up starts from the parent because an option
+      // row's own class name often contains the group's token (phoenix-radio-group__radio), which
+      // would otherwise make the row look like the group it belongs to.
+      .filter(function (row) {
+        var owner = row.parentElement && row.parentElement.closest ? row.parentElement.closest(CUSTOM_CHOICE_GROUP_SELECTOR) : null;
+        return !owner || owner === group;
+      })
+      // The wording can sit beside the drawn box rather than inside the row that carries the state.
+      .filter(function (row) { return normalizeText(customChoiceText(row)) !== ''; });
+  }
+  function customChoiceText(row) {
+    return cleanFieldLabel(nearbyChoiceText(row) || textOf(row));
+  }
+  // A group that carries native inputs is left alone: those inputs are scanned on their own, and
+  // handling the group here as well would fill every option twice.
+  function isCustomChoiceGroup(element) {
+    if (!element || !element.matches || !element.querySelectorAll) return false;
+    if (!element.matches(CUSTOM_CHOICE_GROUP_SELECTOR)) return false;
+    if (element.querySelector('input[type="radio"], input[type="checkbox"]')) return false;
+    return customChoiceRows(element).length > 0;
+  }
+  function customChoiceItems(group) {
+    return customChoiceRows(group).map(function (row) {
+      var text = customChoiceText(row);
+      return { value: text, text: text, element: row };
+    });
+  }
+  function customChoiceSelected(row) {
+    if (!row) return false;
+    if (row.getAttribute && row.getAttribute('aria-checked') === 'true') return true;
+    return CUSTOM_CHOICE_CHECKED_RE.test(String(row.className || ''));
+  }
+  function customChoiceValue(group) {
+    return customChoiceItems(group).filter(function (item) { return customChoiceSelected(item.element); })
+      .map(function (item) { return item.text; }).join('、');
+  }
+  function clickCustomChoice(row) {
+    if (!row) return false;
+    if (typeof row.click === 'function') { try { row.click(); return true; } catch (_) {} }
+    dispatchOpenSequence(row);
+    return true;
+  }
+  function previewCustomChoice(group, expected) {
+    var items = customChoiceItems(group);
+    var indexes = matchChoiceIndexes(items, expected);
+    if (!indexes.length) return null;
+    return indexes.map(function (index) { return items[index].text; }).join('、');
+  }
+  // The state of a div-drawn group lives on its rows, and a component may re-render those rows at
+  // any moment, so the row is looked up by its wording every time rather than holding on to a node
+  // that may already be detached.
+  function customChoiceState(control, text) {
+    var live = customChoiceItems(control).filter(function (item) { return item.text === text; });
+    return customChoiceSelected(live.length ? live[0].element : null);
+  }
+  async function fillCustomChoice(control, field) {
+    var items = customChoiceItems(control);
+    var chosen = matchChoiceIndexes(items, field.proposedValue);
+    // A lone box drawn as a div ("我已阅读并同意") is a yes/no rather than a list of options.
+    var wanted = items.length === 1 ? booleanChoice(field.proposedValue) : null;
+    var unchecking = false;
+    if (!chosen.length && wanted === true) chosen = [0];
+    if (!chosen.length && wanted === false) unchecking = true;
+    if (!chosen.length && !unchecking) return { id: field.id, status: 'failed', reason: '选项没有精确匹配项' };
+    var labels = chosen.map(function (rowIndex) { return items[rowIndex].text; });
+    if (unchecking && customChoiceSelected(items[0].element)) clickCustomChoice(items[0].element);
+    function settled() {
+      if (unchecking) return customChoiceState(control, items[0].text) ? null : true;
+      if (!labels.length) return true;
+      return labels.every(function (text) { return customChoiceState(control, text); }) ? true : null;
+    }
+    var applied = await waitFor(settled, 800);
+    if (!applied) {
+      // Some libraries only commit on the pointer sequence, not on a plain click().
+      chosen.forEach(function (rowIndex) { dispatchOpenSequence(items[rowIndex].element); });
+      applied = await waitFor(settled, 800);
+    }
+    if (!applied) return { id: field.id, status: 'failed', reason: '点了选项，页面没有确认这次选择' };
+    return { id: field.id, status: 'filled' };
+  }
   function choiceTokens(value) {
     return String(value == null ? '' : value).split(/[、,，;；|\/]+/).map(function (token) { return token.trim(); }).filter(Boolean);
   }
@@ -974,12 +1075,12 @@
     context = context || {}; var siteKey = getSiteKey(context); var values = flattenProfile(profile); var used = Object.create(null); var mappings = context.mappings || profile.site_mappings || []; var learned = buildLearnedMap(profile && profile.label_mappings);
     var controls = allControls().filter(isScannableControl);
     controls = dedupeControlDescriptors(controls);
-    return dedupeFieldDescriptors(controls.filter(function (control) { return !isSubmitLike(control); }).map(function (control, index) {
+    return dedupeFieldDescriptors(controls.filter(function (control) { return isCustomChoiceGroup(control) || !isSubmitLike(control); }).map(function (control, index) {
       var label = cleanFieldLabel(deriveLabel(control)); var fingerprint = makeFingerprint(control, label); var sensitive = isSensitiveField({ type: control.type || control.tagName, label: label, name: control.name, id: control.id, placeholder: control.placeholder });
       var mapping = mappings.find(function (item) { return siteMappingMatches(item, siteKey, fingerprint, label); }); var match = mapping ? values.find(function (item) { return item.profileKey === mapping.profile_key; }) : null;
       var matchLabel = [label, control.name || '', control.id || '', control.getAttribute && control.getAttribute('aria-label') || ''].filter(Boolean).join(' '); if (!match) match = findLearnedValue(label, values, used, learned);
       if (!match) match = findProfileValue(matchLabel, values, used, learned);
-      var currentValue = isCustomSelectControl(control) ? customControlValue(control) : isEditableControl(control) ? textOf(control).trim() : control.value || '';
+      var currentValue = isCustomChoiceGroup(control) ? customChoiceValue(control) : isCustomSelectControl(control) ? customControlValue(control) : isEditableControl(control) ? textOf(control).trim() : control.value || '';
       var draft = mapping && findDraft(profile, siteKey, fingerprint, mapping.profile_key); var sourceValue = draft ? draft.value : match ? match.value : currentValue; var isNewField = !match; var confidence = fieldConfidence(match, mapping, label, matchLabel, learned);
       if (match && confidence === 'high' && !isDateComponentLabel(label)) used[match.profileKey] = true;
       var proposed = sourceValue;
@@ -992,6 +1093,7 @@
           proposed = expectedFieldValue(sourceValue, label);
         }
         else if (control.type === 'radio' || control.type === 'checkbox') proposed = previewChoice(control, sourceValue) || sourceValue;
+        else if (isCustomChoiceGroup(control)) proposed = previewCustomChoice(control, sourceValue) || sourceValue;
       }
       return { id: 'resume-field-' + index, controlType: isEditableControl(control) ? 'contenteditable' : control.tagName ? control.tagName.toLowerCase() : 'custom', label: label || '未标注字段', selectorHint: control.id ? '#' + cssEscape(control.id) : null, profileKey: match ? match.profileKey : null, confidence: confidence, currentValue: currentValue, proposedValue: proposed, isNewField: isNewField || !isUsableFieldLabel(label), fingerprint: fingerprint, siteKey: siteKey, sensitive: sensitive, remember: Boolean(mapping && mapping.confirmed), isDate: isDateField(control, label), name: control.name || '' };
     }).filter(shouldIncludeCandidate));
@@ -1079,18 +1181,30 @@
   // another option row, so option groups do not shadow their own children.
   function optionItems(root) {
     if (!root || !root.querySelectorAll) return [];
-    return Array.prototype.slice.call(root.querySelectorAll('[role="option"], li, [data-value], [class*="option"], [class*="select-item"], [class*="menu-item"]'))
+    return Array.prototype.slice.call(root.querySelectorAll('[role="option"], [class~="phoenix-selectList__listItem"], li, [data-value], [class*="option"], [class*="select-item"], [class*="menu-item"]'))
       .filter(isVisible)
+      // The select's own value row is an <li> as well. Reading it as an option would make the
+      // current value look like something that can be picked from a menu.
+      .filter(function (item) { return !(item.closest && item.closest('.phoenix-select__inputWrapper')); })
       .filter(function (item) {
-        if (item.querySelector && item.querySelector('[role="option"], [class*="option"]')) return false;
+        if (item.querySelector && item.querySelector('[role="option"], [class*="option"], [class~="phoenix-selectList__listItem"]')) return false;
         return normalizeText(textOf(item)) !== '' || (item.getAttribute && item.getAttribute('role') === 'option');
       });
   }
   // Only containers that actually float count as a dropdown. A static wrapper whose class
   // happens to contain "dropdown" is part of the page, not a menu that just opened.
-  var POPUP_CONTAINER_SELECTOR = '.ant-select-dropdown:not(.ant-select-dropdown-hidden), .el-select-dropdown, .el-select-dropdown__wrap, .ivu-select-dropdown, .n-select-menu, .arco-select-popup, .t-select__dropdown, .semi-select-option-list, [role="listbox"], [class*="select-dropdown"], [class*="select-menu"], [class*="select-options"], [class*="dropdown"], [class*="popper"], [class*="popup"]';
+  var POPUP_CONTAINER_SELECTOR = '.ant-select-dropdown:not(.ant-select-dropdown-hidden), .el-select-dropdown, .el-select-dropdown__wrap, .ivu-select-dropdown, .n-select-menu, .arco-select-popup, .t-select__dropdown, .semi-select-option-list, .phoenix-selectList, [class*="phoenix-selectList"], [role="listbox"], [class*="select-dropdown"], [class*="select-menu"], [class*="select-options"], [class*="dropdown"], [class*="popper"], [class*="popup"]';
+  // A library menu root is a popup by definition. The position test below cannot be relied on for
+  // it: the panel is often portalled into a positioned wrapper while the panel itself is static.
+  var KNOWN_POPUP_CLASSES = ['phoenix-selectList'];
+  function isKnownPopupRoot(container) {
+    if (!container || !container.className) return false;
+    var className = String(container.className);
+    return KNOWN_POPUP_CLASSES.some(function (name) { return className.indexOf(name) >= 0; });
+  }
   function isFloatingPopup(container) {
     if (!container) return false;
+    if (isKnownPopupRoot(container)) return true;
     if (container.getAttribute && normalizeText(container.getAttribute('role')) === 'listbox') return true;
     var parent = container.parentElement;
     if (parent && parent.tagName && parent.tagName.toLowerCase() === 'body') return true;
@@ -1136,7 +1250,7 @@
       var local = accept(optionItems(next));
       if (local) return local;
     }
-    var owner = control.closest && control.closest('.ant-select, .el-select, .ivu-select, .n-select, .arco-select, .t-select, .semi-select, [role="combobox"]');
+    var owner = control.closest && control.closest('.ant-select, .el-select, .ivu-select, .n-select, .arco-select, .t-select, .semi-select, .phoenix-select, [role="combobox"]');
     if (owner) {
       var owned = accept(optionItems(owner));
       if (owned) return owned;
@@ -1301,12 +1415,27 @@
   // its parent in turn covers all four layouts.
   function openTargets(control) {
     var targets = [control];
-    var owner = control.closest && control.closest('.ant-select, .el-select, .ivu-select, .n-select, .arco-select, .t-select, .semi-select, [role="combobox"], [aria-haspopup]');
+    var owner = control.closest && control.closest('.ant-select, .el-select, .ivu-select, .n-select, .arco-select, .t-select, .semi-select, .phoenix-select, [role="combobox"], [aria-haspopup]');
     if (owner && owner !== control) targets.push(owner);
     var inner = control.querySelector && control.querySelector('input, [class*="selection"], [class*="selector"], [class*="select-view"], [class*="select-input"]');
     if (inner && targets.indexOf(inner) < 0) targets.push(inner);
-    if (control.parentElement && targets.indexOf(control.parentElement) < 0) targets.push(control.parentElement);
+    // The parent is the last resort, so it is also the one most likely to be a link or a button:
+    // clicking those would navigate away or submit the application.
+    if (control.parentElement && !isClickHazard(control.parentElement) && targets.indexOf(control.parentElement) < 0) targets.push(control.parentElement);
     return targets;
+  }
+  // Some dropdowns open on pointerdown and never see a plain click().
+  // A control's ancestor can be a link or a button that navigates or submits. This extension changes
+  // field values and nothing else, so anything clickable in that sense is off limits.
+  function isClickHazard(element) {
+    if (!element || !element.closest) return false;
+    if (element.closest('a[href]')) return true;
+    var tag = String(element.tagName || '').toLowerCase();
+    if (tag !== 'button' && !(element.getAttribute && element.getAttribute('role') === 'button')) return false;
+    // A <button> without an explicit type is a submit button whenever it sits in a form, and a
+    // reset button wipes the form as thoroughly as a submit sends it.
+    var type = String(element.type || '').toLowerCase();
+    return type === 'submit' || type === 'reset' || (type !== 'button' && Boolean(element.closest('form')));
   }
   // Some dropdowns open on pointerdown and never see a plain click().
   function dispatchOpenSequence(element) {
@@ -1314,15 +1443,27 @@
     var view = viewOf(element);
     var MouseCtor = view && view.MouseEvent ? view.MouseEvent : (typeof MouseEvent !== 'undefined' ? MouseEvent : null);
     var PointerCtor = view && view.PointerEvent ? view.PointerEvent : (typeof PointerEvent !== 'undefined' ? PointerEvent : null);
+    // A click on a bare <button> inside a form submits it. Blocking the submit event while the
+    // click is dispatched keeps the component's own handler working without ever sending the form.
+    var form = element.closest ? element.closest('form') : null;
+    var guard = null;
+    if (form) {
+      guard = function (event) { event.preventDefault(); };
+      form.addEventListener('submit', guard, true);
+    }
     try {
-      if (PointerCtor) element.dispatchEvent(new PointerCtor('pointerdown', { bubbles: true, cancelable: true }));
-      if (MouseCtor) {
-        element.dispatchEvent(new MouseCtor('mousedown', { bubbles: true, cancelable: true }));
-        element.dispatchEvent(new MouseCtor('mouseup', { bubbles: true, cancelable: true }));
+      try {
+        if (PointerCtor) element.dispatchEvent(new PointerCtor('pointerdown', { bubbles: true, cancelable: true }));
+        if (MouseCtor) {
+          element.dispatchEvent(new MouseCtor('mousedown', { bubbles: true, cancelable: true }));
+          element.dispatchEvent(new MouseCtor('mouseup', { bubbles: true, cancelable: true }));
+        }
+        element.click();
+      } catch (_) {
+        try { element.click(); } catch (e) {}
       }
-      element.click();
-    } catch (_) {
-      try { element.click(); } catch (e) {}
+    } finally {
+      if (guard) setTimeout(function () { form.removeEventListener('submit', guard, true); }, 0);
     }
   }
   function dismissCustomSelect(control) {
@@ -1349,6 +1490,120 @@
     if (option.getAttribute('aria-selected') === 'true') return true;
     return /(^|[\s_-])(selected|active|checked|is-selected)([\s_-]|$)/i.test(String(option.className || ''));
   }
+  // A cascading picker stores 省/市 (or 学校/学院) as one value while its menu offers the parts one
+  // level at a time. Splitting is deliberately limited to the structural separators: a value with
+  // a space in it (an English job title, say) must not be walked as if it were a hierarchy.
+  var REGION_SUFFIX_RE = /(特别行政区|维吾尔自治区|回族自治区|壮族自治区|内蒙古自治区|自治区|自治州|自治县|自治旗|地区|盟|省|市|县|区|旗)$/;
+  function valueParts(value) {
+    return String(value == null ? '' : value).split(/[\/\-]+/).map(function (part) { return part.trim(); }).filter(Boolean);
+  }
+  // A province-level option can be nothing but the suffix (内蒙古自治区, 广西壮族自治区): stripping
+  // it would leave an empty key that matches nothing, so keep the original when nothing remains.
+  function regionKey(text) {
+    var normalized = normalizeText(text);
+    var stripped = normalized.replace(REGION_SUFFIX_RE, '');
+    return stripped || normalized;
+  }
+  function matchCascadeOption(options, parts) {
+    for (var exact = 0; exact < parts.length; exact++) {
+      var wanted = regionKey(parts[exact]);
+      if (!wanted) continue;
+      for (var index = 0; index < options.length; index++) {
+        if (regionKey(textOf(options[index])) === wanted) return { index: index, part: parts[exact] };
+      }
+    }
+    // 辽宁省 answers a stored 辽宁, but a picker that offers only cities has to answer the second
+    // part, so containment is the fallback rather than giving up.
+    for (var loose = 0; loose < parts.length; loose++) {
+      var looseWanted = regionKey(parts[loose]);
+      if (!looseWanted) continue;
+      for (var candidate = 0; candidate < options.length; candidate++) {
+        var key = regionKey(textOf(options[candidate]));
+        if (key && (key.indexOf(looseWanted) >= 0 || looseWanted.indexOf(key) >= 0)) return { index: candidate, part: parts[loose] };
+      }
+    }
+    return null;
+  }
+  var CASCADE_CONFIRM_RE = /^(确定|确认|完成|完成选择|ok)$/i;
+  // Only the picker's own 确定 counts, and 保存/提交 are deliberately absent from that list: a form
+  // can carry a save or submit button, and clicking one of those is the worst thing this could do.
+  // The menu is the outermost live ancestor of the option rows that is itself a menu root. It has to
+  // be the outermost one: inner list wrappers carry the same class prefix, and a 确定 button lives on
+  // the panel, not on an inner list.
+  var MENU_ROOT_SELECTOR = '[class*="phoenix-selectList"], .ant-select-dropdown, .el-select-dropdown, .el-select-dropdown__wrap, .ivu-select-dropdown, .n-select-menu, .arco-select-popup, .t-select__dropdown, .semi-select-option-list, [role="listbox"]';
+  function panelRootFor(rows) {
+    if (!rows || !rows.length) return null;
+    var start = null;
+    for (var index = 0; index < rows.length && !start; index++) {
+      if (rows[index] && rows[index].isConnected !== false) start = rows[index];
+    }
+    if (!start) return null;
+    var node = start;
+    var panel = null;
+    while (node && node.matches) {
+      if (node.isConnected !== false && node.matches(MENU_ROOT_SELECTOR)) panel = node;
+      node = node.parentElement;
+    }
+    // A "panel" that contains a form is a page container, and a 确定 button found inside one of
+    // those could be anything. Refusing is the safe answer.
+    if (panel && panel.querySelector && panel.querySelector('form')) return null;
+    return panel;
+  }
+  function findCascadeConfirm(rows) {
+    var panel = panelRootFor(rows);
+    if (!panel || !panel.querySelectorAll) return null;
+    var buttons = Array.prototype.slice.call(panel.querySelectorAll('button, [role="button"], [class*="btn"], [class*="button"]')).filter(isVisible);
+    for (var index = 0; index < buttons.length; index++) {
+      if (CASCADE_CONFIRM_RE.test(normalizeText(cleanFieldLabel(textOf(buttons[index]))))) return buttons[index];
+    }
+    return null;
+  }
+  // Words that say the field is a picker rather than a plain list of options.
+  var CASCADE_LABEL_RE = /(地区|城市|省|市|县|区|生源|籍贯|户口|户籍|居住|所在地|地址|学校|院校|学院|单位|部门|机构)/;
+  async function fillCascadeSelect(control, expected) {
+    var parts = valueParts(expected);
+    if (parts.length < 2) return false;
+    var remaining = parts.slice();
+    var clickedParts = [];
+    var lastRows = null;
+    for (var level = 0; level < parts.length && remaining.length; level++) {
+      var options = await waitFor(function () { var found = findCustomOptions(control, null); return found.length ? found : null; }, 600);
+      if (!options) break;
+      var hit = matchCascadeOption(options, remaining);
+      if (!hit) break;
+      var seenBefore = options.slice();
+      lastRows = options;
+      dispatchOpenSequence(options[hit.index]);
+      clickedParts.push(hit.part);
+      remaining = remaining.filter(function (part) { return part !== hit.part; });
+      if (!remaining.length) break;
+      // The next level has to render before it can be clicked, and it has to be a *different* list:
+      // clicking a second time into the same list would only move the selection to another
+      // first-level item and leave a wrong value behind.
+      var advanced = await waitFor(function () {
+        var fresh = findCustomOptions(control, null);
+        return fresh.length && fresh.some(function (row) { return seenBefore.indexOf(row) < 0; }) ? true : null;
+      }, 600);
+      if (!advanced) break;
+    }
+    if (!clickedParts.length) return false;
+    // The rows may have been re-rendered since they were clicked, so read the live ones back before
+    // looking for the panel's own confirm button.
+    var live = await waitFor(function () { var found = findCustomOptions(control, null); return found.length ? found : null; }, 300);
+    var confirm = findCascadeConfirm(live || lastRows || []);
+    if (confirm) dispatchOpenSequence(confirm);
+    var applied = await waitFor(function () {
+      var shown = regionKey(readControlValue(control));
+      if (!shown) return null;
+      // Every level that was clicked has to show up in what the control now reads back.
+      return clickedParts.every(function (part) {
+        var key = regionKey(part);
+        return key && (shown.indexOf(key) >= 0 || key.indexOf(shown) >= 0);
+      }) ? true : null;
+    }, 900);
+    if (!applied) dismissCustomSelect(control);
+    return Boolean(applied);
+  }
   async function fillCustomSelect(control, field) {
     var expected = expectedFieldValue(field.proposedValue, field.label);
     if (!expected) return { id: field.id, status: 'failed', reason: '模板缺少该日期的具体日值' };
@@ -1361,7 +1616,19 @@
     }, 400);
     if (matchedContainer) options = matchedContainer;
     var optionIndex = isDateComponentLabel(field.label) ? matchDateSelectOption(options, expected) : matchSelectOption(options, expected);
-    if (optionIndex < 0) return { id: field.id, status: 'failed', reason: '下拉选项里没有“' + expected + '”' };
+    if (optionIndex < 0) {
+      // A cascading picker offers its parts one level at a time, so no option ever reads as the whole
+      // stored value and the lookup above comes back empty. Walk the value's parts instead; matching
+      // is by wording, so it does not matter which library drew the menu. Only a field whose wording
+      // says it is such a picker takes this path: a value that merely contains a separator (a job
+      // title like 电气-仪表, a date range) must not be walked as if it were a hierarchy.
+      if (CASCADE_LABEL_RE.test(String(field.label || '')) && await fillCascadeSelect(control, expected)) {
+        dismissCustomSelect(control);
+        return { id: field.id, status: 'filled' };
+      }
+      dismissCustomSelect(control);
+      return { id: field.id, status: 'failed', reason: '下拉选项里没有“' + expected + '”' };
+    }
     var option = options[optionIndex];
     var optionText = textOf(option);
     try { option.scrollIntoView({ block: 'nearest' }); } catch (_) {}
@@ -1382,7 +1649,7 @@
     for (var index = 0; index < (fields || []).length; index++) {
       var field = fields[index];
       if (!field || !field.proposedValue || isPlaceholderValue(field.proposedValue) || field.confidence === 'none' || field.isNewField) { results.push({ id: field && field.id, status: 'skipped', reason: '没有可用的已确认资料' }); continue; }
-      var control = resolveField(field, controlMap); if (!control || isSubmitLike(control)) { results.push({ id: field.id, status: 'skipped', reason: '控件不存在或为提交控件' }); continue; }
+      var control = resolveField(field, controlMap); if (!control || (isSubmitLike(control) && !isCustomChoiceGroup(control))) { results.push({ id: field.id, status: 'skipped', reason: '控件不存在或为提交控件' }); continue; }
       if (control.tagName.toLowerCase() === 'select') {
         var expectedSelectValue = expectedFieldValue(field.proposedValue, field.label);
         if (!expectedSelectValue) { results.push({ id: field.id, status: 'failed', reason: '模板缺少该日期的具体日值' }); continue; }
@@ -1407,6 +1674,10 @@
           setChoiceChecked(group[choiceIndexes[0]], true);
         }
         results.push({ id: field.id, status: 'filled' });
+        continue;
+      }
+      if (isCustomChoiceGroup(control)) {
+        results.push(await fillCustomChoice(control, field));
         continue;
       }
       if (isCustomSelectControl(control)) {
@@ -1471,7 +1742,7 @@
         if (timer) clearTimeout(timer);
         timer = setTimeout(function () {
           if (isSensitiveField({ type: control.type || control.tagName, label: field.label, name: control.name, id: control.id })) return;
-          var value = readControlValue(control);
+        var value = isCustomChoiceGroup(control) ? customChoiceValue(control) : readControlValue(control);
           if (value && !isGenericPrompt(value)) updateLocalDraft({ site_key: field.siteKey || siteKey, fingerprint: field.fingerprint, profile_key: field.profileKey, value: value });
         }, 350);
       };
@@ -1544,5 +1815,5 @@
     }, 3000);
     return true;
   }
-  return { normalizeText: normalizeText, controlSelector: controlSelector, isRendered: isRendered, nearbyChoiceText: nearbyChoiceText, labelVariants: labelVariants, withoutLeadingQualifier: withoutLeadingQualifier, isPlaceholderValue: isPlaceholderValue, buildLearnedMap: buildLearnedMap, findLearnedValue: findLearnedValue, leafProfileKey: leafProfileKey, learnedMatch: learnedMatch, fieldConfidence: fieldConfidence, labelMatchStrength: labelMatchStrength, profileLabelStrength: profileLabelStrength, matchChoiceIndexes: matchChoiceIndexes, choiceTokens: choiceTokens, booleanChoice: booleanChoice, choiceItems: choiceItems, choiceText: choiceText, scanRoots: scanRoots, searchRoots: searchRoots, allControls: allControls, controlIndex: controlIndex, isLiveControl: isLiveControl, deriveLabel: deriveLabel, flattenProfile: flattenProfile, matchSelectOption: matchSelectOption, matchDateSelectOption: matchDateSelectOption, matchChoice: matchChoice, isSubmitLike: isSubmitLike, isSensitiveField: isSensitiveField, isGenericPrompt: isGenericPrompt, cleanFieldLabel: cleanFieldLabel, isUsableFieldLabel: isUsableFieldLabel, shouldIncludeCandidate: shouldIncludeCandidate, customControlValue: customControlValue, readControlValue: readControlValue, isScannableControl: isScannableControl, isCustomSelectControl: isCustomSelectControl, isEditableControl: isEditableControl, isTextEntryControl: isTextEntryControl, readEditableText: readEditableText, findCustomOptions: findCustomOptions, combineContextLabel: combineContextLabel, findContainerLabel: findContainerLabel, preferredContainerSelectors: preferredContainerSelectors, isNavigationOnlyLabel: isNavigationOnlyLabel, isDateComponentLabel: isDateComponentLabel, dateComponentValue: dateComponentValue, dedupeControlDescriptors: dedupeControlDescriptors, dedupeFieldDescriptors: dedupeFieldDescriptors, valueMatchesLabel: valueMatchesLabel, setNativeValue: setNativeValue, makeFingerprint: makeFingerprint, siteMappingMatches: siteMappingMatches, collectDraftValues: collectDraftValues, upsertDrafts: upsertDrafts, scan: scan, fill: fill, rememberFields: rememberFields, highlight: highlight, clearHighlight: clearHighlight };
+  return { normalizeText: normalizeText, controlSelector: controlSelector, isRendered: isRendered, nearbyChoiceText: nearbyChoiceText, labelVariants: labelVariants, withoutLeadingQualifier: withoutLeadingQualifier, isPlaceholderValue: isPlaceholderValue, buildLearnedMap: buildLearnedMap, findLearnedValue: findLearnedValue, leafProfileKey: leafProfileKey, learnedMatch: learnedMatch, fieldConfidence: fieldConfidence, labelMatchStrength: labelMatchStrength, profileLabelStrength: profileLabelStrength, matchChoiceIndexes: matchChoiceIndexes, choiceTokens: choiceTokens, booleanChoice: booleanChoice, choiceItems: choiceItems, choiceText: choiceText, scanRoots: scanRoots, searchRoots: searchRoots, allControls: allControls, controlIndex: controlIndex, isLiveControl: isLiveControl, deriveLabel: deriveLabel, flattenProfile: flattenProfile, matchSelectOption: matchSelectOption, matchDateSelectOption: matchDateSelectOption, matchChoice: matchChoice, isSubmitLike: isSubmitLike, isSensitiveField: isSensitiveField, isGenericPrompt: isGenericPrompt, cleanFieldLabel: cleanFieldLabel, isUsableFieldLabel: isUsableFieldLabel, shouldIncludeCandidate: shouldIncludeCandidate, customControlValue: customControlValue, readControlValue: readControlValue, isScannableControl: isScannableControl, isCustomSelectControl: isCustomSelectControl, isEditableControl: isEditableControl, isTextEntryControl: isTextEntryControl, readEditableText: readEditableText, isCustomChoiceGroup: isCustomChoiceGroup, customChoiceItems: customChoiceItems, customChoiceValue: customChoiceValue, customChoiceSelected: customChoiceSelected, previewCustomChoice: previewCustomChoice, isKnownPopupRoot: isKnownPopupRoot, panelRootFor: panelRootFor, findCascadeConfirm: findCascadeConfirm, customChoiceText: customChoiceText, customChoiceState: customChoiceState, fillCustomChoice: fillCustomChoice, isClickHazard: isClickHazard, dispatchOpenSequence: dispatchOpenSequence, valueParts: valueParts, regionKey: regionKey, matchCascadeOption: matchCascadeOption, findCustomOptions: findCustomOptions, combineContextLabel: combineContextLabel, findContainerLabel: findContainerLabel, preferredContainerSelectors: preferredContainerSelectors, isNavigationOnlyLabel: isNavigationOnlyLabel, isDateComponentLabel: isDateComponentLabel, dateComponentValue: dateComponentValue, dedupeControlDescriptors: dedupeControlDescriptors, dedupeFieldDescriptors: dedupeFieldDescriptors, valueMatchesLabel: valueMatchesLabel, setNativeValue: setNativeValue, makeFingerprint: makeFingerprint, siteMappingMatches: siteMappingMatches, collectDraftValues: collectDraftValues, upsertDrafts: upsertDrafts, scan: scan, fill: fill, rememberFields: rememberFields, highlight: highlight, clearHighlight: clearHighlight };
 }));

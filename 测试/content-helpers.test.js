@@ -851,3 +851,105 @@ test('reads option wording from beside the control when it has no label', () => 
    assert.deepEqual(Content.searchRoots(control), [shadowRoot, ownerDocument]);
    assert.deepEqual(Content.searchRoots({}), []);
  });
+
+ test('splits a cascading value on its structural separators only', () => {
+   assert.deepEqual(Content.valueParts('辽宁-锦州-黑山县'), ['辽宁', '锦州', '黑山县']);
+   assert.deepEqual(Content.valueParts('辽宁省/锦州市'), ['辽宁省', '锦州市']);
+   // A value that merely contains spaces is not a hierarchy: splitting it would make the fill
+   // click one word of an English job title and then another.
+   assert.deepEqual(Content.valueParts('Electrical Engineer'), ['Electrical Engineer']);
+   assert.deepEqual(Content.valueParts(''), []);
+   assert.deepEqual(Content.valueParts(null), []);
+ });
+
+ test('matches a cascade level against a value part with or without its suffix', () => {
+   // A province-level option can be nothing but the suffix, and stripping it would leave an empty
+   // key that matches nothing at all.
+   assert.equal(Content.regionKey('内蒙古自治区'), '内蒙古自治区');
+   assert.equal(Content.regionKey('辽宁省'), '辽宁');
+   assert.equal(Content.regionKey('锦州市'), '锦州');
+   assert.equal(Content.regionKey('黑山县'), '黑山');
+ });
+
+ test('picks the option a value part names, and refuses when none does', () => {
+   const options = [{ text: '北京市' }, { text: '辽宁省' }, { text: '沈阳市' }];
+   assert.deepEqual(Content.matchCascadeOption(options, ['辽宁', '锦州']), { index: 1, part: '辽宁' });
+   // A picker that offers only cities still has to answer the city part of the value.
+   assert.deepEqual(Content.matchCascadeOption([{ text: '沈阳市' }, { text: '锦州市' }], ['辽宁', '锦州']), { index: 1, part: '锦州' });
+   assert.equal(Content.matchCascadeOption([{ text: '北京市' }, { text: '天津市' }], ['辽宁', '锦州']), null);
+   assert.equal(Content.matchCascadeOption([], ['辽宁']), null);
+ });
+
+ test('recognises a div-based choice group and its option rows', () => {
+   const row = (text, checked) => ({
+     className: 'phoenix-radio' + (checked ? ' phoenix-radio--checked' : ''),
+     classNameIsTokens: true,
+     textContent: text,
+     querySelector: () => null,
+     getAttribute: () => null,
+     matches: () => true
+   });
+   const wrapper = { querySelector: () => null, parentElement: null, previousElementSibling: null, classList: { remove() {} } };
+   const rows = [row('男', true), row('女', false)].map((item) => Object.assign(item, { parentElement: wrapper, previousElementSibling: wrapper }));
+   const group = {
+     matches: () => true,
+     querySelectorAll: () => rows,
+     querySelector: () => null,
+     parentElement: null
+   };
+   assert.equal(Content.isCustomChoiceGroup(group), true);
+   // A group that carries native inputs is filled through those inputs instead.
+   const withInputs = Object.assign({}, group, { querySelector: (selector) => (selector.indexOf('input') >= 0 ? {} : null) });
+   assert.equal(Content.isCustomChoiceGroup(withInputs), false);
+   assert.equal(Content.isCustomChoiceGroup(null), false);
+ });
+
+ test('scopes the cascade confirm button to the menu, not the page', () => {
+   const isMenuClass = (selector) => selector.indexOf('phoenix-selectList') >= 0;
+   const confirmInside = { tagName: 'BUTTON', type: 'button', textContent: '确定', checkVisibility: () => true };
+   // An inner list wrapper carries the same class prefix as the panel. Taking the innermost match
+   // would put the panel's own 确定 button out of range, which is a bug this already went through.
+   const panel = {
+     className: 'phoenix-selectList',
+     isConnected: true,
+     matches: isMenuClass,
+     querySelector: () => null,
+     querySelectorAll: (selector) => (selector.indexOf('button') >= 0 ? [confirmInside] : []),
+     parentElement: null
+   };
+   const list = {
+     className: 'phoenix-selectList__list',
+     isConnected: true,
+     matches: isMenuClass,
+     parentElement: panel
+   };
+   const row = { isConnected: true, matches: () => false, parentElement: list };
+
+   assert.equal(Content.panelRootFor([row]), panel);
+   assert.equal(Content.findCascadeConfirm([row]), confirmInside);
+
+   // Anything that swallows the page's form is a page container, and a 确定 button found in one of
+   // those could be anything at all, so the look-up has to refuse.
+   const formPanel = Object.assign({}, panel, { querySelector: (selector) => (selector === 'form' ? {} : null) });
+   const listInForm = Object.assign({}, list, { parentElement: formPanel });
+   assert.equal(Content.panelRootFor([{ isConnected: true, matches: () => false, parentElement: listInForm }]), null);
+
+   // A row that is no longer in the document cannot name a live panel either.
+   assert.equal(Content.panelRootFor([{ isConnected: false, matches: () => false, parentElement: list }]), null);
+   assert.equal(Content.panelRootFor([]), null);
+ });
+
+ test('will not click a button that could navigate or submit', () => {
+   const insideForm = { closest: (selector) => (selector === 'form' ? {} : null) };
+   assert.equal(Content.isClickHazard({ tagName: 'BUTTON', type: 'submit', closest: () => null }), true);
+   assert.equal(Content.isClickHazard({ tagName: 'BUTTON', type: 'reset', closest: () => null }), true);
+   // A bare <button> inside a form is a submit button, however it is worded.
+   assert.equal(Content.isClickHazard(Object.assign({
+     tagName: 'BUTTON',
+     type: 'submit',
+     getAttribute: () => null
+   }, insideForm)), true);
+   assert.equal(Content.isClickHazard({ tagName: 'BUTTON', type: 'button', closest: () => null }), false);
+   assert.equal(Content.isClickHazard({ tagName: 'A', closest: (selector) => (selector === 'a[href]' ? {} : null) }), true);
+   assert.equal(Content.isClickHazard({ tagName: 'LI', closest: () => null }), false);
+ });

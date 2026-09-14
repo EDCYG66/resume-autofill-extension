@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>中国兵器工业集团招聘网 (phoenix) 表单夹具</title>
+</head>
+<body>
+<!--
+  Fixture for the 中国兵器工业集团 recruitment site, whose ATS is built on the "phoenix"
+  component library. Every class name below is transcribed from the applicant's saved page
+  (中国兵器工业招聘网.html) rather than invented, because the whole bug is about which hook the
+  engine can use to name a control:
+
+    * the field name lives only in <label class="form-item__text"> inside .form-item--phoenix.
+      There is no label[for], no name, no id, no aria-label anywhere.
+    * a dropdown is .phoenix-select > span.phoenix-select__calcEle + .phoenix-select__placeHolder
+      + ul.phoenix-select__content > li.phoenix-select__inputWrapper > input.phoenix-select__input.
+      That input has an empty placeholder on the real page and is display-only: the stylesheet
+      paints .phoenix-select__input--unText transparent with a pointer cursor, so typing into it
+      filters the list but never commits a value. The fixture reproduces that: a typed value is
+      reverted to the component's own state, exactly like the real widget.
+    * the option panel does not exist until the trigger is clicked, so nothing in the saved DOM
+      shows it. The class names come from the phoenix stylesheets (.phoenix-selectList,
+      .phoenix-selectList__contentWraper, .phoenix-selectList__list,
+      .phoenix-selectList__listItem, .phoenix-selectList__listItem--isSelected,
+      .phoenix-selectList__emptyText). Rows carry no role="option" and no data-value.
+    * 性别 is a .phoenix-radio-group of plain divs with no <input> at all; the only state is the
+      phoenix-radio--checked class on the chosen row.
+    * the region cascade (生源地) also renders as a .phoenix-select, but its panel is a two pane
+      province/city picker with 取消 / 确定. That panel is not in the saved page either; its shell
+      uses the phoenix classes the shipped stylesheet does have for a footer (__footer,
+      __footerButton), a two column body (__extend-render-slot--two-slots, __group, __list) and an
+      empty state (__emptyWrapper, __emptyText), and the region-only names carry a --regionPicker /
+      __region* marker. The wording and the province -> city -> 确定 flow follow the screenshot.
+
+  Nothing here helps the engine along: no input has a name, id, aria-label or useful placeholder,
+  and the panel is built lazily by the wiring script below.
+
+  Every value the smoke test asserts is read back out of this live DOM, never echoed from the
+  profile, so a field the engine did not really fill comes back "" and fails.
+-->
+<form id="phoenix-fixture">
+  <div class="fields-row field-two clearfix">
+
+    <div class="fields-col">
+      <div class="form-item form-item--phoenix">
+        <div class="form-item__title form-item__title--right">
+          <label class="form-item__text">姓名</label>
+        </div>
+        <div class="form-item__control">
+          <div class="phoenix-input">
+            <input class="phoenix-input__input phoenix-input__input--sizeLarge" type="text" placeholder="请输入" spellcheck="false">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="fields-col">
+      <div class="form-item form-item--phoenix">
+        <div class="form-item__title form-item__title--right">
+          <label class="form-item__text">性别</label>
+        </div>
+        <div class="form-item__control">
+          <div class="phoenix-radio-group">
+            <div class="phoenix-radio-group__radioItem">
+              <div class="phoenix-radio phoenix-radio--withLabel phoenix-radio-group__radio animation" style="max-width: 100%; min-width: 42px;">
+                <div class="phoenix-radio__wrapper">
+                  <div class="phoenix-radio__circle-wrapper">
+                    <div class="phoenix-radio__circle"></div>
+                    <div class="phoenix-radio__dot"></div>
+                  </div>
+                  <span class="phoenix-radio__radio-text phoenix-radio__radio-text--appear phoenix-radio__radio-text--fontMiddle">男</span>
+                </div>
+              </div>
+            </div>
+            <div class="phoenix-radio-group__radioItem">
+              <div class="phoenix-radio phoenix-radio--withLabel phoenix-radio-group__radio animation" style="max-width: 100%; min-width: 42px;">
+                <div class="phoenix-radio__wrapper">
+                  <div class="phoenix-radio__circle-wrapper">
+                    <div class="phoenix-radio__circle"></div>
+                    <div class="phoenix-radio__dot"></div>
+                  </div>
+                  <span class="phoenix-radio__radio-text phoenix-radio__radio-text--appear phoenix-radio__radio-text--fontMiddle">女</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="fields-row field-two clearfix">
+
+    <div class="fields-col">
+      <div class="form-item form-item--phoenix">
+        <div class="form-item__title form-item__title--right">
+          <label class="form-item__text">学历</label>
+        </div>
+        <div class="form-item__control">
+          <div class="phoenix-unmodeled-layer block">
+            <div class="phoenix-unmodeled-layer__inner">
+              <div class="phoenix-unmodeled-layer__protect">
+                <div class="phoenix-unmodeled-layer__content phoenix-unmodeled-layer__content--block">
+                  <div class="phoenix-select phoenix-select--editable phoenix-select--borderColorable phoenix-select--large">
+                    <span class="phoenix-select__calcEle"></span>
+                    <div class="phoenix-select__placeHolder phoenix-select__placeHolder--large phoenix-select__placeHolder--empty">请选择</div>
+                    <ul class="phoenix-select__content">
+                      <li class="phoenix-select__inputWrapper phoenix-select__inputWrapper--emptyMultiValue">
+                        <input placeholder="" class="phoenix-select__input phoenix-select__input--large phoenix-select__input--unText" value="">
+                      </li>
+                      <span class="phoenix-select__tipWrapper phoenix-select__tipWrapper--large">
+                        <span class="phoenix-select__tipEle"></span>
+                      </span>
+                    </ul>
+                    <div class="phoenix-select__switchArrow">
+                      <svg width="1em" height="1em" viewBox="0 0 18 18"><path d="M9 10.5L3 5.3z" fill="#83898F"></path></svg>
+                    </div>
+                    <div class="phoenix-select__clearIcon">
+                      <svg width="1em" height="1em" viewBox="0 0 18 18"><path d="M2.6 15.4z" fill="#FFF"></path></svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="fields-col">
+      <div class="form-item form-item--phoenix">
+        <div class="form-item__title form-item__title--right">
+          <label class="form-item__text">政治面貌</label>
+        </div>
+        <div class="form-item__control">
+          <div class="phoenix-unmodeled-layer block">
+            <div class="phoenix-unmodeled-layer__inner">
+              <div class="phoenix-unmodeled-layer__protect">
+                <div class="phoenix-unmodeled-layer__content phoenix-unmodeled-layer__content--block">
+                  <div class="phoenix-select phoenix-select--editable phoenix-select--borderColorable phoenix-select--large">
+                    <span class="phoenix-select__calcEle"></span>
+                    <div class="phoenix-select__placeHolder phoenix-select__placeHolder--large phoenix-select__placeHolder--empty">请选择</div>
+                    <ul class="phoenix-select__content">
+                      <li class="phoenix-select__inputWrapper phoenix-select__inputWrapper--emptyMultiValue">
+                        <input placeholder="" class="phoenix-select__input phoenix-select__input--large phoenix-select__input--unText" value="">
+                      </li>
+                      <span class="phoenix-select__tipWrapper phoenix-select__tipWrapper--large">
+                        <span class="phoenix-select__tipEle"></span>
+                      </span>
+                    </ul>
+                    <div class="phoenix-select__switchArrow">
+                      <svg width="1em" height="1em" viewBox="0 0 18 18"><path d="M9 10.5L3 5.3z" fill="#83898F"></path></svg>
+                    </div>
+                    <div class="phoenix-select__clearIcon">
+                      <svg width="1em" height="1em" viewBox="0 0 18 18"><path d="M2.6 15.4z" fill="#FFF"></path></svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="fields-row field-two clearfix">
+
+    <div class="fields-col">
+      <div class="form-item form-item--phoenix">
+        <div class="form-item__title form-item__title--right">
+          <label class="form-item__text">民族</label>
+        </div>
+        <div class="form-item__control">
+          <div class="phoenix-unmodeled-layer block">
+            <div class="phoenix-unmodeled-layer__inner">
+              <div class="phoenix-unmodeled-layer__protect">
+                <div class="phoenix-unmodeled-layer__content phoenix-unmodeled-layer__content--block">
+                  <div class="phoenix-select phoenix-select--editable phoenix-select--borderColorable phoenix-select--large">
+                    <span class="phoenix-select__calcEle"></span>
+                    <div class="phoenix-select__placeHolder phoenix-select__placeHolder--large phoenix-select__placeHolder--empty">请选择</div>
+                    <ul class="phoenix-select__content">
+                      <li class="phoenix-select__inputWrapper phoenix-select__inputWrapper--emptyMultiValue">
+                        <input placeholder="" class="phoenix-select__input phoenix-select__input--large phoenix-select__input--unText" value="">
+                      </li>
+                      <span class="phoenix-select__tipWrapper phoenix-select__tipWrapper--large">
+                        <span class="phoenix-select__tipEle"></span>
+                      </span>
+                    </ul>
+                    <div class="phoenix-select__switchArrow">
+                      <svg width="1em" height="1em" viewBox="0 0 18 18"><path d="M9 10.5L3 5.3z" fill="#83898F"></path></svg>
+                    </div>
+                    <div class="phoenix-select__clearIcon">
+                      <svg width="1em" height="1em" viewBox="0 0 18 18"><path d="M2.6 15.4z" fill="#FFF"></path></svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Decoy: pages have their own 保存 button, and a picker's confirm step must never click it.
+         The smoke script asserts this stays at zero clicks. -->
+    <div class="fields-col">
+      <button id="decoy-save" type="button" class="phoenix-text-button phoenix-text-button--primary">保存</button>
+      <button id="decoy-confirm" type="button" class="phoenix-text-button phoenix-text-button--primary">确认</button>
+    </div>
+    <div class="fields-col">
+      <div class="form-item form-item--phoenix">
+        <div class="form-item__title form-item__title--right">
+          <label class="form-item__text">生源地</label>
+        </div>
+        <div class="form-item__control">
+          <div class="phoenix-unmodeled-layer block">
+            <div class="phoenix-unmodeled-layer__inner">
+              <div class="phoenix-unmodeled-layer__protect">
+                <div class="phoenix-unmodeled-layer__content phoenix-unmodeled-layer__content--block">
+                  <div class="phoenix-select phoenix-select--editable phoenix-select--borderColorable phoenix-select--large">
+                    <span class="phoenix-select__calcEle"></span>
+                    <div class="phoenix-select__placeHolder phoenix-select__placeHolder--large phoenix-select__placeHolder--empty">请选择</div>
+                    <ul class="phoenix-select__content">
+                      <li class="phoenix-select__inputWrapper phoenix-select__inputWrapper--emptyMultiValue">
+                        <input placeholder="" class="phoenix-select__input phoenix-select__input--large phoenix-select__input--unText" value="">
+                      </li>
+                      <span class="phoenix-select__tipWrapper phoenix-select__tipWrapper--large">
+                        <span class="phoenix-select__tipEle"></span>
+                      </span>
+                    </ul>
+                    <div class="phoenix-select__switchArrow">
+                      <svg width="1em" height="1em" viewBox="0 0 18 18"><path d="M9 10.5L3 5.3z" fill="#83898F"></path></svg>
+                    </div>
+                    <div class="phoenix-select__clearIcon">
+                      <svg width="1em" height="1em" viewBox="0 0 18 18"><path d="M2.6 15.4z" fill="#FFF"></path></svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- The real page's footer buttons are 暂存 and 预览并提交; this one stands in for the primary
+       action so the fixture can prove that filling the form never submits it. -->
+  <button id="phoenix-submit" type="submit">预览并提交</button>
+</form>
+<pre id="smoke-result"></pre>
+<script src="../content.js"></script>
+<script>
+  // Wiring for the phoenix components. The option panels are built here, on the first click of a
+  // trigger, which is what the real widget does: the saved page has no .phoenix-selectList in it.
+  (function () {
+    var SELECT_OPTIONS = {
+      '学历': ['小学', '初中', '高中', '中技（中专/技校/职高）', '高技', '大专', '本科', '硕士研究生'],
+      '政治面貌': ['群众', '中共党员', '中共预备党员', '入党积极分子', '共青团员', '民革党员', '民盟盟员', '民建会员'],
+      '民族': ['汉族', '回族', '满族', '蒙古族', '维吾尔族', '朝鲜族', '其他']
+    };
+    var PROVINCE_CITIES = {
+      '北京市': ['北京市'],
+      '天津市': ['天津市'],
+      '河北省': ['石家庄市', '唐山市', '秦皇岛市', '邯郸市', '保定市'],
+      '山西省': ['太原市', '大同市', '临汾市'],
+      '辽宁省': ['沈阳市', '大连市', '鞍山市', '抚顺市', '锦州市', '营口市'],
+      '吉林省': ['长春市', '吉林市', '四平市'],
+      '黑龙江省': ['哈尔滨市', '齐齐哈尔市', '大庆市'],
+      '上海市': ['上海市'],
+      '江苏省': ['南京市', '苏州市', '无锡市'],
+      '浙江省': ['杭州市', '宁波市', '温州市'],
+      '山东省': ['济南市', '青岛市', '烟台市'],
+      '河南省': ['郑州市', '洛阳市'],
+      '湖北省': ['武汉市', '宜昌市']
+    };
+
+    function textOf(element) { return element ? String(element.textContent || '').trim() : ''; }
+    function labelOf(item) {
+      return textOf(item.querySelector('.form-item__text'));
+    }
+    function escapeHtml(value) {
+      return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // One panel at a time, the way a portalled menu behaves. openFor() keeps an already open panel
+    // open when the same trigger is clicked again, so a driver that dispatches a whole
+    // mousedown/mouseup/click sequence does not toggle the menu shut under itself.
+    var openPanel = null;
+    var openOwner = null;
+    function closePanel() {
+      if (openPanel && openPanel.parentNode) openPanel.parentNode.removeChild(openPanel);
+      openPanel = null;
+      openOwner = null;
+    }
+    function openFor(owner, build) {
+      if (openOwner === owner && openPanel) return;
+      closePanel();
+      openPanel = build();
+      openOwner = owner;
+      document.body.appendChild(openPanel);
+    }
+
+    // ---------------------------------------------------------------- phoenix-select
+    function wireSelect(item, options) {
+      var root = item.querySelector('.phoenix-select');
+      var input = root.querySelector('.phoenix-select__input');
+      var placeHolder = root.querySelector('.phoenix-select__placeHolder');
+      var calc = root.querySelector('.phoenix-select__calcEle');
+      var tip = root.querySelector('.phoenix-select__tipEle');
+      var tipWrapper = root.querySelector('.phoenix-select__tipWrapper');
+      var arrow = root.querySelector('.phoenix-select__switchArrow');
+      var clear = root.querySelector('.phoenix-select__clearIcon');
+      var committed = '';
+
+      // The display belongs to the component, not to whoever types into the box: --unText makes it
+      // transparent and pointer-cursored, so a typed value is never the selected value. Undoing it
+      // is what stops a plain "set the input value" write from looking like a successful pick.
+      function holdTypedText() { if (input.value !== committed) input.value = committed; }
+      input.addEventListener('input', holdTypedText);
+
+      function show(value) {
+        committed = value;
+        input.value = value;
+        calc.textContent = value;
+        placeHolder.textContent = value || '请选择';
+        placeHolder.classList.toggle('phoenix-select__placeHolder--empty', !value);
+        tip.textContent = value;
+        tipWrapper.classList.toggle('phoenix-select__tipWrapper--visible', Boolean(value));
+        arrow.classList.toggle('phoenix-select__switchArrow--hide', Boolean(value));
+        clear.classList.toggle('phoenix-select__clearIcon--show', Boolean(value));
+      }
+
+      function buildPanel() {
+        var panel = document.createElement('div');
+        panel.className = 'phoenix-selectList phoenix-selectList--border phoenix-selectList--middle';
+        panel.innerHTML = '<div class="phoenix-selectList__contentWraper"><ul class="phoenix-selectList__list">' +
+          options.map(function (option) {
+            return '<li class="phoenix-selectList__listItem"><span class="phoenix-selectList__singleLabel">' +
+              escapeHtml(option) + '</span></li>';
+          }).join('') +
+          '</ul></div>';
+        panel.addEventListener('click', function (event) {
+          var row = event.target && event.target.closest ? event.target.closest('.phoenix-selectList__listItem') : null;
+          if (!row || !panel.contains(row)) return;
+          var rows = panel.querySelectorAll('.phoenix-selectList__listItem');
+          for (var index = 0; index < rows.length; index++) {
+            rows[index].classList.toggle('phoenix-selectList__listItem--isSelected', rows[index] === row);
+          }
+          show(textOf(row));
+          closePanel();
+        });
+        return panel;
+      }
+
+      root.addEventListener('click', function () { openFor(root, buildPanel); });
+    }
+
+    // ---------------------------------------------------------------- phoenix-radio-group
+    function wireRadioGroup(item) {
+      var group = item.querySelector('.phoenix-radio-group');
+      group.addEventListener('click', function (event) {
+        var radio = event.target && event.target.closest ? event.target.closest('.phoenix-radio') : null;
+        if (!radio || !group.contains(radio)) return;
+        var radios = group.querySelectorAll('.phoenix-radio');
+        for (var index = 0; index < radios.length; index++) {
+          var checked = radios[index] === radio;
+          radios[index].classList.toggle('phoenix-radio--checked', checked);
+          radios[index].querySelector('.phoenix-radio__circle-wrapper').classList.toggle('phoenix-radio__circle-wrapper--checked', checked);
+          radios[index].querySelector('.phoenix-radio__circle').classList.toggle('phoenix-radio__circle--checked', checked);
+          radios[index].querySelector('.phoenix-radio__dot').classList.toggle('phoenix-radio__dot--checked', checked);
+        }
+      });
+    }
+
+    // ---------------------------------------------------------------- 生源地 region cascade
+    // Three steps and no shortcut: pick a province, pick a city, press 确定. Until 确定 is pressed
+    // the control's displayed value is untouched, which is how the site behaves and what keeps the
+    // smoke test from passing on a half-finished cascade.
+    function wireRegion(item) {
+      var root = item.querySelector('.phoenix-select');
+      var input = root.querySelector('.phoenix-select__input');
+      var placeHolder = root.querySelector('.phoenix-select__placeHolder');
+      var calc = root.querySelector('.phoenix-select__calcEle');
+      var tip = root.querySelector('.phoenix-select__tipEle');
+      var tipWrapper = root.querySelector('.phoenix-select__tipWrapper');
+      var arrow = root.querySelector('.phoenix-select__switchArrow');
+      var clear = root.querySelector('.phoenix-select__clearIcon');
+      var committed = '';
+
+      function holdTypedText() { if (input.value !== committed) input.value = committed; }
+      input.addEventListener('input', holdTypedText);
+
+      function show(value) {
+        committed = value;
+        input.value = value;
+        calc.textContent = value;
+        placeHolder.textContent = value || '请选择';
+        placeHolder.classList.toggle('phoenix-select__placeHolder--empty', !value);
+        tip.textContent = value;
+        tipWrapper.classList.toggle('phoenix-select__tipWrapper--visible', Boolean(value));
+        arrow.classList.toggle('phoenix-select__switchArrow--hide', Boolean(value));
+        clear.classList.toggle('phoenix-select__clearIcon--show', Boolean(value));
+      }
+
+      // The picker is a phoenix-selectList with a footer and a two slot body, which is what the
+      // real stylesheet ships (.phoenix-selectList__footer, __footerButton,
+      // __extend-render-slot--two-slots, __group, __emptyText). The province list is the left slot,
+      // the city list the right one, and the value only moves when 确定 is pressed.
+      function buildPanel() {
+        var draft = { province: '', city: '' };
+        var panel = document.createElement('div');
+        panel.className = 'phoenix-selectList phoenix-selectList--border phoenix-selectList--middle phoenix-selectList--showFooter phoenix-selectList--regionPicker';
+        panel.innerHTML =
+          '<div class="phoenix-selectList__contentWraper">' +
+            '<div class="phoenix-selectList__regionHeader">' +
+              '<span class="phoenix-selectList__regionSelected">已选地区0/1</span>' +
+              '<a class="phoenix-selectList__regionClear">清空已选</a>' +
+              '<span class="phoenix-selectList__regionAll">全部省市</span>' +
+            '</div>' +
+            '<div class="phoenix-selectList__extend-render-slot phoenix-selectList__extend-render-slot--two-slots">' +
+              '<div class="phoenix-selectList__group">' +
+                '<ul class="phoenix-selectList__list phoenix-selectList__list--province"></ul>' +
+              '</div>' +
+              '<div class="phoenix-selectList__group">' +
+                '<ul class="phoenix-selectList__list phoenix-selectList__list--city"></ul>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="phoenix-selectList__footer">' +
+            '<button type="button" class="phoenix-selectList__footerButton">取消</button>' +
+            '<button type="button" class="phoenix-selectList__footerButton phoenix-selectList__footerButton--primary">确定</button>' +
+          '</div>';
+
+        var provinceList = panel.querySelector('.phoenix-selectList__list--province');
+        var cityList = panel.querySelector('.phoenix-selectList__list--city');
+        var selected = panel.querySelector('.phoenix-selectList__regionSelected');
+
+        function markSelected(list, active) {
+          var rows = list.querySelectorAll('.phoenix-selectList__listItem');
+          for (var index = 0; index < rows.length; index++) {
+            rows[index].classList.toggle('phoenix-selectList__listItem--isSelected', rows[index] === active);
+          }
+        }
+        function renderProvinces() {
+          provinceList.innerHTML = Object.keys(PROVINCE_CITIES).map(function (province) {
+            return '<li class="phoenix-selectList__listItem">' + escapeHtml(province) + '</li>';
+          }).join('');
+        }
+        function renderCities() {
+          if (!draft.province) {
+            cityList.innerHTML = '<div class="phoenix-selectList__emptyWrapper">' +
+              '<span class="phoenix-selectList__emptyText">请在左侧选择地区</span></div>';
+            return;
+          }
+          cityList.innerHTML = (PROVINCE_CITIES[draft.province] || []).map(function (city) {
+            return '<li class="phoenix-selectList__listItem">' + escapeHtml(city) + '</li>';
+          }).join('');
+        }
+        function renderSelected() {
+          selected.textContent = '已选地区' + (draft.province ? '1/1' : '0/1');
+        }
+
+        renderProvinces();
+        renderCities();
+        renderSelected();
+
+        panel.addEventListener('click', function (event) {
+          var target = event.target;
+          var closest = function (selector) { return target && target.closest ? target.closest(selector) : null; };
+          var row = closest('.phoenix-selectList__listItem');
+          if (row) {
+            if (row.closest('.phoenix-selectList__list--province')) {
+              draft.province = textOf(row);
+              draft.city = '';
+              markSelected(provinceList, row);
+              renderCities();
+              renderSelected();
+              return;
+            }
+            draft.city = textOf(row);
+            markSelected(cityList, row);
+            return;
+          }
+          if (closest('.phoenix-selectList__regionClear')) {
+            draft.province = '';
+            draft.city = '';
+            markSelected(provinceList, null);
+            renderCities();
+            renderSelected();
+            return;
+          }
+          if (closest('.phoenix-selectList__footerButton--primary')) {
+            if (draft.province) show(draft.city ? draft.province + '/' + draft.city : draft.province);
+            closePanel();
+            return;
+          }
+          if (closest('.phoenix-selectList__footerButton')) closePanel();
+        });
+
+        return panel;
+      }
+
+      root.addEventListener('click', function () { openFor(root, buildPanel); });
+    }
+
+    var items = document.querySelectorAll('.form-item--phoenix');
+    for (var index = 0; index < items.length; index++) {
+      var item = items[index];
+      var label = labelOf(item);
+      if (label === '生源地') wireRegion(item);
+      else if (label === '性别') wireRadioGroup(item);
+      else if (SELECT_OPTIONS[label]) wireSelect(item, SELECT_OPTIONS[label]);
+    }
+  })();
+</script>
+<script>
+  window.submitAttempts = 0;
+  // A page carries its own 保存 button, and the confirm step of a picker must never reach it.
+  window.decoySaveClicks = 0;
+  window.decoyConfirmClicks = 0;
+  document.querySelector('#decoy-save').addEventListener('click', function () { window.decoySaveClicks += 1; });
+  // Wording the cascade's confirm step *would* accept, placed early in the document: only the
+  // panel-scoped search may keep this at zero.
+  document.querySelector('#decoy-confirm').addEventListener('click', function () { window.decoyConfirmClicks += 1; });
+  document.querySelector('#phoenix-fixture').addEventListener('submit', function (event) {
+    event.preventDefault();
+    window.submitAttempts += 1;
+  });
+  window.addEventListener('load', function () {
+    var output = document.querySelector('#smoke-result');
+    function report(payload) { output.textContent = JSON.stringify(payload); }
+
+    function itemFor(label) {
+      var items = document.querySelectorAll('.form-item--phoenix');
+      for (var index = 0; index < items.length; index++) {
+        var text = items[index].querySelector('.form-item__text');
+        if (text && text.textContent.trim() === label) return items[index];
+      }
+      return null;
+    }
+    // A phoenix-select shows its value twice: the component paints .phoenix-select__input and keeps
+    // .phoenix-select__placeHolder in sync. Read the input first and fall back to the display, so
+    // the value reported is whatever the page really shows.
+    function readSelect(label) {
+      var item = itemFor(label);
+      var root = item ? item.querySelector('.phoenix-select') : null;
+      if (!root) return '';
+      var input = root.querySelector('.phoenix-select__input');
+      var value = input && typeof input.value === 'string' ? input.value.trim() : '';
+      if (value) return value;
+      var holder = root.querySelector('.phoenix-select__placeHolder');
+      var text = holder ? String(holder.textContent || '').trim() : '';
+      // 请选择 is the prompt, not a value - the site never records it.
+      return /^(请选择|请填写|请输入|请上传|请搜索)$/.test(text) ? '' : text;
+    }
+    function readText(label) {
+      var item = itemFor(label);
+      var control = item ? item.querySelector('.phoenix-input__input, input, textarea') : null;
+      return control && typeof control.value === 'string' ? control.value.trim() : '';
+    }
+    // No <input> in a phoenix radio group: the only state is the checked modifier on the row's root.
+    function readRadio(label) {
+      var item = itemFor(label);
+      if (!item) return '';
+      var radios = item.querySelectorAll('.phoenix-radio');
+      for (var index = 0; index < radios.length; index++) {
+        if (!radios[index].classList.contains('phoenix-radio--checked')) continue;
+        var text = radios[index].querySelector('.phoenix-radio__radio-text');
+        return text ? text.textContent.trim() : '';
+      }
+      return '';
+    }
+
+    try {
+      // 生源地 is given in this repository's profile format (dash separated, no 省/市 suffix), so the
+      // fixture also covers matching a profile value against the site's own wording.
+      var profile = {
+        basic: {
+          name: '测试姓名',
+          gender: '男',
+          political_status: '共青团员',
+          ethnicity: '汉族',
+          place_of_origin: '辽宁-锦州-黑山县'
+        },
+        education: [{ level: '硕士', school: '测试大学' }]
+      };
+      var allCandidates = ResumeContent.scan(profile, { siteKey: 'file://phoenix-fixture' });
+      var candidates = allCandidates.filter(function (candidate) {
+        return candidate.proposedValue && !candidate.isNewField;
+      });
+      Promise.resolve(ResumeContent.fill(candidates)).then(function (results) {
+        report({
+          nameFilled: readText('姓名'),
+          studyLevelFilled: readSelect('学历'),
+          politicalStatusFilled: readSelect('政治面貌'),
+          ethnicityFilled: readSelect('民族'),
+          genderFilled: readRadio('性别'),
+          originRegionFilled: readSelect('生源地'),
+          scannedCount: allCandidates.length,
+          submitAttempts: window.submitAttempts,
+          decoySaveClicks: window.decoySaveClicks,
+          decoyConfirmClicks: window.decoyConfirmClicks,
+          fillStatuses: (results || []).map(function (item) { return item && item.status; })
+        });
+      }, function (error) {
+        report({ error: String(error && error.stack || error) });
+      });
+    } catch (error) {
+      report({ error: String(error && error.stack || error) });
+    }
+  });
+</script>
+</body>
+</html>
