@@ -151,10 +151,18 @@ function Save-Screenshot {
   param([string]$PagePath, [string]$Png, [int]$Width, [int]$Height, [int]$Budget = 8000)
   if (Test-Path -LiteralPath $Png) { Remove-Item -LiteralPath $Png -Force }
   $uri = [Uri]::new($PagePath).AbsoluteUri
-  & $exe '--headless=new' '--disable-gpu' '--no-first-run' '--allow-file-access-from-files' `
-    "--user-data-dir=$profileDir" "--window-size=$Width,$Height" `
-    "--force-device-scale-factor=$Scale" "--virtual-time-budget=$Budget" `
-    "--screenshot=$Png" $uri 2>&1 | Out-Null
+  # Chromium reports "N bytes written to file" on stderr. Windows PowerShell 5.1 turns a native
+  # command's redirected stderr into error records, which $ErrorActionPreference='Stop' then
+  # aborts the script over — a successful capture looked like a failure. The capture is verified
+  # by the file check below, so let stderr be noisy for the duration of the call.
+  $previous = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    & $exe '--headless=new' '--disable-gpu' '--no-first-run' '--allow-file-access-from-files' `
+      "--user-data-dir=$profileDir" "--window-size=$Width,$Height" `
+      "--force-device-scale-factor=$Scale" "--virtual-time-budget=$Budget" `
+      "--screenshot=$Png" $uri 2>&1 | Out-Null
+  } finally { $ErrorActionPreference = $previous }
   if (-not (Test-Path -LiteralPath $Png)) { throw "No screenshot was written for $PagePath" }
   $size = [Math]::Round((Get-Item -LiteralPath $Png).Length / 1KB)
   Write-Output ("wrote {0} ({1} KB, {2}x{3} css px at {4}x)" -f (Split-Path -Leaf $Png), $size, $Width, $Height, $Scale)
@@ -166,8 +174,13 @@ function Save-Screenshot {
  function Assert-Rendered {
    param([string]$PagePath, [string]$Pattern, [string]$What)
    $uri = [Uri]::new($PagePath).AbsoluteUri
-   $dom = & $exe '--headless=new' '--disable-gpu' '--no-first-run' '--allow-file-access-from-files' `
-     "--user-data-dir=$profileDir" '--virtual-time-budget=8000' '--dump-dom' $uri 2>$null | Out-String
+   # Same stderr caveat as Save-Screenshot: the dump either matches or the throw below fires.
+   $previous = $ErrorActionPreference
+   $ErrorActionPreference = 'Continue'
+   try {
+     $dom = & $exe '--headless=new' '--disable-gpu' '--no-first-run' '--allow-file-access-from-files' `
+       "--user-data-dir=$profileDir" '--virtual-time-budget=8000' '--dump-dom' $uri 2>&1 | Out-String
+   } finally { $ErrorActionPreference = $previous }
    if ($dom -notmatch $Pattern) {
      throw "The preview page rendered no $What, so the screenshot would only show static markup."
    }
