@@ -6,7 +6,9 @@
 # folder and press 重新加载; the pinned manifest key keeps the stored profile attached.
 #
 # Deliberately NOT included: the blank template (模板文件.txt ships beside the zip as its own
-# file), the tests, the build helpers and anything personal. The checks at the end enforce that.
+# file), the tests, the build helpers, the documentation (README.md and docs/ stay in the
+# repository — its screenshots and its CHANGELOG link would dangle inside the zip) and anything
+# personal. The checks at the end enforce that.
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $stage = Join-Path $root '测试\输出\pack'
@@ -14,7 +16,7 @@ $zipPath = Join-Path $root '简历填充助手.zip'
 
 $files = @(
   'manifest.json','popup.html','popup.js','popup.css','options.html','options.js','options.css',
-  'tokens.css','shared.js','content.js','profile-parser.js','README.md','LICENSE'
+  'tokens.css','shared.js','content.js','profile-parser.js','LICENSE'
 )
 $directories = @('icons')
 
@@ -59,7 +61,8 @@ try {
   if (-not ($entries | Where-Object { $_ -like 'icons/*' })) { throw 'The icons are missing from the zip.' }
 
   # The zip is shared with other people, so it must stay free of personal data and of files
-  # that only make sense inside the repository.
+  # that only make sense inside the repository: the README, the changelog and docs/ belong on the
+  # repository page, where their screenshots and links actually resolve.
   $personalFile = Join-Path $root 'personal-values.local.txt'
   if (Test-Path -LiteralPath $personalFile) {
     $personalValues = @(Get-Content -Encoding UTF8 -LiteralPath $personalFile | ForEach-Object { $_.Trim() } | Where-Object { $_ -and $_[0] -ne '#' })
@@ -74,7 +77,7 @@ try {
   } else {
     Write-Warning 'personal-values.local.txt is missing; the personal value scan is skipped.'
   }
-  $forbidden = @($entries | Where-Object { $_ -match '模板文件|测试/|tools/|resume-profile|personal-values|\.local\.|\.ps1$' })
+  $forbidden = @($entries | Where-Object { $_ -match '模板文件|测试/|tools/|README|CHANGELOG|^docs/|resume-profile|personal-values|\.local\.|\.ps1$' })
   if ($forbidden.Count) { throw "The zip carries files it should not: $($forbidden -join ', ')" }
 
   $kilobytes = [Math]::Round((Get-Item -LiteralPath $zipPath).Length / 1KB)

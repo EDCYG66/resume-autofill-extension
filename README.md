@@ -325,8 +325,10 @@ shared.js              弹窗与编辑器共用的存储逻辑（三方合并、
 profile-parser.js      模板/导出文本与资料对象之间的解析与序列化
 tokens.css             WinUI 3 设计令牌，颜色与间距的唯一来源
 icons/                 工具栏与扩展管理页的图标（由 tools/make_icons.py 生成）
-模板文件.txt            空白模板，发给别人填的那份
+LICENSE                MIT 许可
 ```
+
+`模板文件.txt` 不在压缩包里——它是单独一个文件，跟 zip 一起发。
 
 只在仓库里、不进发布包的部分：
 

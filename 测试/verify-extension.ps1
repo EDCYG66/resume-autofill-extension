@@ -134,7 +134,7 @@ if (Test-Path -LiteralPath $zipPath) {
   $archive = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
   try {
     $entries = @($archive.Entries | ForEach-Object { $_.FullName })
-    $leaked = @($entries | Where-Object { $_ -match 'resume-profile|personal-values|\.local\.|模板文件|测试/|tools/' })
+    $leaked = @($entries | Where-Object { $_ -match 'resume-profile|personal-values|\.local\.|模板文件|测试/|tools/|README|CHANGELOG|^docs/' })
     if ($leaked.Count) { throw "The zip carries files it should not: $($leaked -join ', ')" }
     if (-not ($entries | Where-Object { $_ -eq 'manifest.json' })) { throw 'The zip is not directly loadable: manifest.json is not at its root' }
   } finally { $archive.Dispose() }

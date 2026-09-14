@@ -45,7 +45,7 @@ if ($manifest.key -ne (Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $
 # this test's own working directory lives under 测试/ as well.
 $strayFiles = @(Get-ChildItem -LiteralPath $extDir -Recurse -File | ForEach-Object {
   $relative = $_.FullName.Substring($extDir.Length + 1)
-  if ($relative -match '模板文件|resume-profile|personal-values|\.local\.' -or $relative -match '^(测试|tools)[\\/]' -or $_.Extension -eq '.ps1') {
+  if ($relative -match '模板文件|resume-profile|personal-values|\.local\.' -or $relative -match '^(测试|tools|docs)[\\/]' -or $relative -match '^(README|CHANGELOG)\.md$' -or $_.Extension -eq '.ps1') {
     $relative
   }
 })
