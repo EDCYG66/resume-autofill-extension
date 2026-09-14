@@ -37,7 +37,14 @@
         hasCustomKey: Boolean(customKeyPresent) && customKeyPresent.value === 'job_code',
         hasSiteMemory: document.body.innerText.indexOf('https://example.com') >= 0,
         hasAttachmentTab: document.body.innerText.indexOf('附件') >= 0,
-        hasEditorContent: document.querySelector('#editor').innerText.length > 0
+        hasEditorContent: document.querySelector('#editor').innerText.length > 0,
+        // Every tab draws its glyph from options.js's ICONS table. A tab whose key is missing
+        // there still renders a span with an empty <svg>, so the check has to look inside the
+        // svg for the drawn shapes; 家庭背景 shipped with no glyph because nothing did.
+        tabsWithoutIcon: tabs().filter(function (button) {
+          var icon = button.querySelector('.nav-icon');
+          return !icon || !icon.querySelector('svg *');
+        }).map(function (button) { return button.textContent; })
       };
 
       // Phase 2: the education tab, for the flexible date fields.

@@ -83,6 +83,24 @@ foreach ($page in @('popup.html','options.html')) {
   if (-not $text.Contains('href="tokens.css"')) { throw "$page does not link tokens.css" }
 }
 
+# The editor draws one icon per nav tab from its own ICONS table, and a tab whose key is missing
+# there renders an empty SVG: the glyph silently disappears and nothing else fails. 家庭背景
+# shipped that way, so the two hand-written lists are compared here instead of trusted.
+$optionsJs = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $root 'options.js')
+$iconsBlock = [regex]::Match($optionsJs, '(?s)var ICONS = \{(.*?)\r?\n  \};')
+$tabsBlock = [regex]::Match($optionsJs, '(?s)var tabs = \[(.*?)\r?\n  \];')
+if (-not $iconsBlock.Success -or -not $tabsBlock.Success) {
+  throw 'options.js no longer declares ICONS and tabs in the shape this check reads.'
+}
+$iconKeys = @([regex]::Matches($iconsBlock.Groups[1].Value, '(?m)^\s+([a-z_]+):') | ForEach-Object { $_.Groups[1].Value })
+$tabKeys = @([regex]::Matches($tabsBlock.Groups[1].Value, "\['([a-z_]+)'") | ForEach-Object { $_.Groups[1].Value })
+if ($tabKeys.Count -lt 10) { throw "Only $($tabKeys.Count) editor tabs were read; this check would be vacuous." }
+$withoutIcon = @($tabKeys | Where-Object { $iconKeys -notcontains $_ })
+if ($withoutIcon.Count) { throw "These 资料编辑器 tabs would render no icon: $($withoutIcon -join ', ')" }
+$unusedIcons = @($iconKeys | Where-Object { $tabKeys -notcontains $_ })
+if ($unusedIcons.Count) { throw "These icons in options.js belong to no tab: $($unusedIcons -join ', ')" }
+Write-Output "Editor nav check passed: all $($tabKeys.Count) tabs have their own icon."
+
 # The blank template is a deliverable, so it has to stay committed. Your own filled-in copies
 # keep the personal file names below and must stay ignored.
 $ignore = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $root '.gitignore')

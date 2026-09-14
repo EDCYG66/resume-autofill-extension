@@ -19,8 +19,9 @@ if (-not $dom.Contains('"hasCustomKey":true')) { throw 'Custom field editor did 
 if (-not $dom.Contains('"hasSiteMemory":true')) { throw 'Site memory summary did not render.' }
 if (-not $dom.Contains('"hasAttachmentTab":false')) { throw 'Attachment tab is still visible.' }
 if (-not $dom.Contains('"hasEditorContent":true')) { throw 'Options editor content is blank.' }
+if (-not $dom.Contains('"tabsWithoutIcon":[]')) { throw 'A 资料分类 tab rendered no icon glyph.' }
 if (-not $dom.Contains('"startDateInputType":"text"')) { throw 'Education start date is not the flexible text input.' }
 if (-not $dom.Contains('"monthOnlyPreserved":true')) { throw 'A month-only start date was not preserved in the editor.' }
 if (-not $dom.Contains('"dayPrecisionValue":"2024-09-18"')) { throw 'Day precision was not accepted and normalised.' }
 if (-not $dom.Contains('"invalidFormatFlagged":true')) { throw 'A malformed date was not flagged.' }
-Write-Output 'Options smoke test passed: legacy profile loaded; custom field and site memory rendered; flexible dates accept month and day precision; no attachment tab.'
+Write-Output 'Options smoke test passed: legacy profile loaded; custom field and site memory rendered; every 资料分类 tab drew its icon; flexible dates accept month and day precision; no attachment tab.'
