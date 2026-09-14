@@ -58,31 +58,35 @@
       self_evaluation: '一段评价',
       label_mappings: [{ label: '个人自述', profile_key: 'self_evaluation' }]
     }, { siteKey: 'file://fixture' }).find(function (item) { return item.label === '个人自述'; });
-    document.querySelector('#result').textContent = JSON.stringify({
-      candidates: candidates.length,
-      discoveredNewField: Boolean(newField && newField.isNewField),
-      discoveredNewFieldDraft: draftCandidates.length,
-      sensitiveDraftBlocked: sensitiveField.sensitive && draftCandidates.every(function (draft) { return draft.fingerprint !== sensitiveField.fingerprint; }),
-      daysProposal: daysField ? daysField.proposedValue : null,
-      daysConfidence: daysField ? daysField.confidence : null,
-      fillResults: fillResults,
-      learnBefore: learnBefore ? { isNewField: learnBefore.isNewField, confidence: learnBefore.confidence } : null,
-      learnAfter: learnAfter ? { profileKey: learnAfter.profileKey, confidence: learnAfter.confidence, proposedValue: learnAfter.proposedValue } : null,
-      state: {
-        name: document.querySelector('#full-name').value,
-        gender: document.querySelector('#gender-male').checked ? '男' : '女',
-        phone: document.querySelector('#phone').value,
-        school: document.querySelector('#school').value,
-        degree: document.querySelector('#degree').value,
-        studyMode: document.querySelector('#study-mode').value,
-        role: document.querySelector('#role').value,
-        dayMon: document.querySelector('#day-mon').checked,
-        dayTue: document.querySelector('#day-tue').checked,
-        dayWed: document.querySelector('#day-wed').checked,
-        adjust: document.querySelector('#adjust').checked,
-        reject: document.querySelector('#reject').checked,
-        submitAttempts: window.submitAttempts
-      }
+    // The snapshot has to wait for fill(): the plain text fields resolve on a microtask, so
+    // reading the page synchronously would capture it before anything was written.
+    Promise.resolve(fillResults).then(function (results) {
+      document.querySelector('#result').textContent = JSON.stringify({
+        candidates: candidates.length,
+        discoveredNewField: Boolean(newField && newField.isNewField),
+        discoveredNewFieldDraft: draftCandidates.length,
+        sensitiveDraftBlocked: sensitiveField.sensitive && draftCandidates.every(function (draft) { return draft.fingerprint !== sensitiveField.fingerprint; }),
+        daysProposal: daysField ? daysField.proposedValue : null,
+        daysConfidence: daysField ? daysField.confidence : null,
+        fillResults: results,
+        learnBefore: learnBefore ? { isNewField: learnBefore.isNewField, confidence: learnBefore.confidence } : null,
+        learnAfter: learnAfter ? { profileKey: learnAfter.profileKey, confidence: learnAfter.confidence, proposedValue: learnAfter.proposedValue } : null,
+        state: {
+          name: document.querySelector('#full-name').value,
+          gender: document.querySelector('#gender-male').checked ? '男' : '女',
+          phone: document.querySelector('#phone').value,
+          school: document.querySelector('#school').value,
+          degree: document.querySelector('#degree').value,
+          studyMode: document.querySelector('#study-mode').value,
+          role: document.querySelector('#role').value,
+          dayMon: document.querySelector('#day-mon').checked,
+          dayTue: document.querySelector('#day-tue').checked,
+          dayWed: document.querySelector('#day-wed').checked,
+          adjust: document.querySelector('#adjust').checked,
+          reject: document.querySelector('#reject').checked,
+          submitAttempts: window.submitAttempts
+        }
+      });
     });
   </script>
 </body>

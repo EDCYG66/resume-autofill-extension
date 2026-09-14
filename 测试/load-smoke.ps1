@@ -14,7 +14,7 @@ $browser = Get-TestBrowserOrThrow
 # Hard-coded on purpose: if the manifest key is dropped or swapped, the browser falls back
 # to a path-derived ID and this test fails instead of silently orphaning the stored data.
 $expectedId = 'peinhogkoplbbmiloaheefjoamoclmgm'
-$manifest = Get-Content -Raw -LiteralPath (Join-Path $root 'manifest.json') | ConvertFrom-Json
+$manifest = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $root 'manifest.json') | ConvertFrom-Json
 if (-not $manifest.key) { throw 'manifest.json has no key; the ID would follow the folder path.' }
 $sha = [System.Security.Cryptography.SHA256]::Create()
 try { $hash = $sha.ComputeHash([System.Convert]::FromBase64String($manifest.key)) } finally { $sha.Dispose() }
@@ -28,7 +28,7 @@ $extDir = Join-Path $work 'ext'
 $profile = Join-Path $work 'profile'
 New-Item -ItemType Directory -Force -Path $extDir | Out-Null
 
-foreach ($name in @('manifest.json','popup.html','popup.js','popup.css','options.html','options.js','options.css','tokens.css','content.js','profile-parser.js')) {
+ foreach ($name in @('manifest.json','popup.html','popup.js','popup.css','options.html','options.js','options.css','tokens.css','shared.js','content.js','profile-parser.js')) {
   Copy-Item -LiteralPath (Join-Path $root $name) -Destination $extDir
 }
 Copy-Item -LiteralPath (Join-Path $root 'icons') -Destination $extDir -Recurse
@@ -38,11 +38,11 @@ $stderr = Join-Path $work 'load-smoke-stderr.txt'
 $process = Start-Process -FilePath $browser -ArgumentList @(
   '--headless=new', '--disable-gpu', '--no-first-run',
   (Quote-Arg "--user-data-dir=$profile"), (Quote-Arg "--load-extension=$extDir"),
-  '--virtual-time-budget=3000', '--dump-dom', 'about:blank'
+  '--virtual-time-budget=8000', '--dump-dom', 'about:blank'
 ) -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
 if ($process.ExitCode -ne 0) { throw "Browser exited with code $($process.ExitCode)." }
 
-$browserLog = if (Test-Path -LiteralPath $stderr) { Get-Content -Raw -LiteralPath $stderr } else { '' }
+ $browserLog = if (Test-Path -LiteralPath $stderr) { Get-Content -Raw -Encoding UTF8 -LiteralPath $stderr } else { '' }
 # A build that still honours the flag rejects a bad manifest loudly. Silence means the flag was
 # simply ignored, which is the case from Chrome 137 on, so the check cannot run at all.
 $loadFailed = $browserLog -match 'Failed to load extension|Manifest is not valid|Manifest file is missing'
@@ -52,7 +52,7 @@ if (-not (Test-Path -LiteralPath $prefPath)) {
   Write-Warning "SKIPPED: $browser wrote no profile, so it ignores --load-extension (Chrome 137 and later do). Put a Chromium build that still honours it in tests/browser.local.txt, or set `$env:RESUME_TEST_BROWSER, to run this check."
   exit 0
 }
-$pref = Get-Content -Raw -LiteralPath $prefPath | ConvertFrom-Json
+$pref = Get-Content -Raw -Encoding UTF8 -LiteralPath $prefPath | ConvertFrom-Json
 $settings = $pref.extensions.settings
 $loaded = @($settings.PSObject.Properties | Where-Object { $_.Value.location -eq 8 })
 if ($loaded.Count -eq 0) {

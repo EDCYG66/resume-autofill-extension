@@ -11,8 +11,8 @@ $fixturePath = Join-Path $PSScriptRoot 'options-fixture.html'
 $fixture = [Uri]::new($fixturePath).AbsoluteUri
 $process = Start-Process -FilePath $chrome -ArgumentList @('--headless=new','--disable-gpu','--allow-file-access-from-files',(Quote-Arg "--user-data-dir=$profile"),'--virtual-time-budget=1500','--dump-dom',$fixture) -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
 if ($process.ExitCode -ne 0) { throw "Chrome exited with code $($process.ExitCode)." }
-$dom = Get-Content -Raw -LiteralPath $stdout
-if (-not $dom.Contains('"tabCount":13')) { throw 'Options smoke test did not render all tabs.' }
+$dom = Get-Content -Raw -Encoding UTF8 -LiteralPath $stdout
+if (-not $dom.Contains('"tabCount":14')) { throw 'Options smoke test did not render all tabs.' }
 if (-not $dom.Contains('"hasAdditionalTab":true')) { throw 'The 附加信息 tab did not render.' }
 if (-not $dom.Contains('"hasCustomTab":true')) { throw 'Custom fields tab did not render.' }
 if (-not $dom.Contains('"hasCustomKey":true')) { throw 'Custom field editor did not render the imported key.' }

@@ -117,6 +117,10 @@ applied_subsidiary=
 relatives_in_company=
 # 是否有手术史或重大疾病史：填 是 或 否
 medical_history=
+# 是否接受岗位调剂：填 是 或 否
+accept_adjustment=
+# 兄弟姐妹数量：只填数字
+siblings_count=
 # 校园大使推荐码 / 内推码：没有就留空
 referral_code=
 
@@ -128,6 +132,8 @@ referral_code=
 school=
 # 学院 / 院系
 college=
+# 学号
+student_id=
 # 开始时间 / 入学时间：格式 2024-09 或 2024-09-01
 start_date=
 # 结束时间 / 毕业时间：格式 2027-06 或 2027-06-30
@@ -154,8 +160,18 @@ second_major=
 major_category=
 # 专业排名，例如 前10%
 major_rank=
+# 专业排名百分比：网申表格问「年级前 __%」时，这里只填数字，例如 10
+major_rank_percent=
 # 绩点 / 平均分
 gpa=
+# 满分平均学分绩点，例如 4.0 或 5.0
+gpa_max=
+# 加权平均分，例如 87.5
+weighted_score=
+# 上面的分数满分是多少，例如 100
+score_max=
+# 是否有挂科经历：填 否 或 是
+has_failed_course=
 # 英语等级，例如 大学英语六级
 english_level=
 # 英语等级成绩：只填数字
@@ -280,8 +296,27 @@ category=
 name=
 # 熟练程度，例如 熟悉 / 精通
 level=
+# 成绩 / 分数，例如 六级 520、雅思 6.5
+score=
 # 技能应用说明
 evidence=
+
+# ------------------------------------------------------------
+# [family.1] 家庭背景
+# 网申表格常问父母的工作单位和职务，有几位家人就复制几份，
+# 段落名改成 [family.2]、[family.3] 即可。
+# ------------------------------------------------------------
+[family.1]
+# 关系：父亲 / 母亲 / 配偶 / 其他
+relation=
+# 姓名
+name=
+# 工作单位
+employer=
+# 职务
+role=
+# 联系电话
+phone=
 
 # ------------------------------------------------------------
 # [self_evaluation] 自我评价

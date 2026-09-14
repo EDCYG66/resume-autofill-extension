@@ -29,6 +29,7 @@
     campus_roles: 'campus_roles',
     campus_role: 'campus_roles',
     skills: 'skills',
+    family: 'family',
     application_answers: 'application_answers',
     custom_fields: 'custom_fields',
     site_mappings: 'site_mappings',
@@ -37,21 +38,22 @@
   };
   var SECTION_ORDER = [
     'basic', 'intention', 'education', 'employment', 'projects', 'honors',
-    'activities', 'campus_roles', 'skills', 'self_evaluation',
+    'activities', 'campus_roles', 'skills', 'family', 'self_evaluation',
     'application_answers', 'custom_fields', 'site_mappings', 'site_drafts', 'label_mappings',
     'additional'
   ];
   var KNOWN_KEYS = {
     basic: ['name', 'gender', 'birth_date', 'age', 'work_start_date', 'work_years', 'ethnicity', 'native_place', 'political_status', 'marital_status', 'household_registration', 'place_of_origin', 'current_residence', 'mailing_address', 'phone', 'phone_code', 'email', 'wechat', 'qq', 'id_type', 'id_number', 'has_children', 'emergency_contact', 'emergency_phone', 'height', 'weight'],
     intention: ['target_role', 'industry', 'city', 'salary', 'employment_type', 'available_date', 'interview_site'],
-    education: ['school', 'college', 'start_date', 'end_date', 'duration_years', 'level', 'admission_type', 'study_mode', 'graduate_type', 'degree_certificate', 'degree_name', 'major', 'second_major', 'major_category', 'major_rank', 'gpa', 'english_level', 'english_score', 'research_direction', 'advisor', 'thesis_title', 'courses', 'description'],
-    additional: ['hobbies', 'specialty', 'punishment', 'academic_works', 'patents', 'law_violation', 'applied_subsidiary', 'relatives_in_company', 'medical_history', 'referral_code'],
+    education: ['school', 'college', 'student_id', 'start_date', 'end_date', 'duration_years', 'level', 'admission_type', 'study_mode', 'graduate_type', 'degree_certificate', 'degree_name', 'major', 'second_major', 'major_category', 'major_rank', 'major_rank_percent', 'gpa', 'gpa_max', 'weighted_score', 'score_max', 'has_failed_course', 'english_level', 'english_score', 'research_direction', 'advisor', 'thesis_title', 'courses', 'description'],
+    additional: ['hobbies', 'specialty', 'punishment', 'academic_works', 'patents', 'law_violation', 'applied_subsidiary', 'relatives_in_company', 'medical_history', 'referral_code', 'accept_adjustment', 'siblings_count'],
     employment: ['employer', 'role', 'start_date', 'end_date', 'employer_type', 'location', 'project_name', 'salary', 'duties', 'description'],
     projects: ['name', 'start_date', 'end_date', 'role', 'organization', 'participant_count', 'research_direction', 'introduction', 'duties', 'outcomes', 'skills', 'related_paper'],
     honors: ['name', 'date', 'issuer', 'description'],
     activities: ['name', 'start_date', 'end_date', 'role', 'organization', 'description'],
     campus_roles: ['organization', 'role', 'start_date', 'end_date', 'duties', 'gains'],
-    skills: ['category', 'name', 'level', 'evidence'],
+    skills: ['category', 'name', 'level', 'score', 'evidence'],
+    family: ['relation', 'name', 'employer', 'role', 'phone'],
     application_answers: ['question', 'answer'],
     custom_fields: ['key', 'label', 'category', 'value', 'aliases', 'field_type', 'enabled'],
     site_mappings: ['site_key', 'fingerprint', 'selector_hint', 'label', 'profile_key', 'field_type', 'confirmed'],
@@ -62,7 +64,7 @@
   function createEmptyProfile() {
     return {
       basic: {}, intention: {}, additional: {}, education: [], employment: [], projects: [],
-      honors: [], activities: [], campus_roles: [], skills: [],
+      honors: [], activities: [], campus_roles: [], skills: [], family: [],
       self_evaluation: '', application_answers: [], custom_fields: [],
       site_mappings: [], site_drafts: [], label_mappings: [], extras: {}
     };
@@ -118,14 +120,15 @@
   var ASSIGNABLE_FIELDS = [
     { section: 'basic', label: '基本信息', scalar: true, fields: [['name', '姓名'], ['gender', '性别'], ['birth_date', '出生日期'], ['age', '年龄'], ['work_start_date', '参加工作时间'], ['work_years', '工作经验'], ['ethnicity', '民族'], ['native_place', '籍贯'], ['political_status', '政治面貌'], ['marital_status', '婚姻状况'], ['household_registration', '户口所在地'], ['place_of_origin', '生源地'], ['current_residence', '现居住地'], ['mailing_address', '通信地址'], ['phone', '联系电话'], ['phone_code', '手机区号/类别'], ['email', '邮箱'], ['wechat', '微信'], ['qq', 'QQ'], ['id_type', '证件类型'], ['id_number', '身份证号'], ['has_children', '有无子女'], ['emergency_contact', '紧急联系人'], ['emergency_phone', '紧急联系电话'], ['height', '身高'], ['weight', '体重']] },
     { section: 'intention', label: '求职意向', scalar: true, fields: [['target_role', '期望职位'], ['industry', '期望行业'], ['city', '期望城市'], ['salary', '期望薪资'], ['employment_type', '工作性质'], ['available_date', '可到岗时间'], ['interview_site', '面试站点']] },
-    { section: 'education', label: '教育经历', fields: [['school', '学校'], ['college', '学院'], ['start_date', '开始时间'], ['end_date', '结束时间'], ['duration_years', '学制'], ['level', '学历'], ['admission_type', '招生类型'], ['study_mode', '学习形式'], ['graduate_type', '应届往届'], ['degree_certificate', '学位证'], ['degree_name', '学位名称'], ['major', '专业'], ['second_major', '第二专业'], ['major_category', '专业分类'], ['major_rank', '专业排名'], ['gpa', '绩点/均分'], ['english_level', '英语等级'], ['english_score', '英语等级成绩'], ['research_direction', '研究方向'], ['advisor', '导师'], ['thesis_title', '毕业论文题目'], ['description', '描述']] },
+    { section: 'education', label: '教育经历', fields: [['school', '学校'], ['college', '学院'], ['student_id', '学号'], ['start_date', '开始时间'], ['end_date', '结束时间'], ['duration_years', '学制'], ['level', '学历'], ['admission_type', '招生类型'], ['study_mode', '学习形式'], ['graduate_type', '应届往届'], ['degree_certificate', '学位证'], ['degree_name', '学位名称'], ['major', '专业'], ['second_major', '第二专业'], ['major_category', '专业分类'], ['major_rank', '专业排名'], ['major_rank_percent', '专业排名百分比'], ['gpa', '绩点/均分'], ['gpa_max', '满分平均学分绩点'], ['weighted_score', '加权平均分'], ['score_max', '满分'], ['has_failed_course', '是否有挂科经历'], ['english_level', '英语等级'], ['english_score', '英语等级成绩'], ['research_direction', '研究方向'], ['advisor', '导师'], ['thesis_title', '毕业论文题目'], ['description', '描述']] },
     { section: 'employment', label: '工作/实习', fields: [['employer', '单位'], ['role', '职位'], ['start_date', '开始时间'], ['end_date', '结束时间'], ['employer_type', '单位性质'], ['location', '工作地点'], ['salary', '税前月薪'], ['description', '工作内容']] },
     { section: 'projects', label: '项目经历', fields: [['name', '项目名称'], ['role', '担任角色'], ['organization', '项目单位'], ['start_date', '开始时间'], ['end_date', '结束时间'], ['introduction', '项目介绍'], ['outcomes', '项目成果'], ['related_paper', '相关论文']] },
     { section: 'honors', label: '荣誉奖励', fields: [['name', '荣誉名称'], ['date', '获得时间'], ['issuer', '颁发单位'], ['description', '说明']] },
     { section: 'activities', label: '实践活动', fields: [['name', '活动名称'], ['role', '身份/角色'], ['organization', '组织'], ['start_date', '开始时间'], ['end_date', '结束时间'], ['description', '活动描述']] },
     { section: 'campus_roles', label: '校内职务', fields: [['organization', '组织/学校'], ['role', '职务'], ['start_date', '开始时间'], ['end_date', '结束时间'], ['gains', '任职收获']] },
-    { section: 'skills', label: '技能', fields: [['name', '技能名称'], ['category', '分类'], ['level', '熟练程度'], ['evidence', '应用说明']] },
-    { section: 'additional', label: '附加信息', scalar: true, fields: [['hobbies', '兴趣爱好'], ['specialty', '特长'], ['punishment', '受处分情况'], ['academic_works', '学术专著'], ['patents', '专利成果'], ['law_violation', '违法违纪情况'], ['applied_subsidiary', '是否应聘过本公司'], ['relatives_in_company', '是否有亲友在本公司'], ['medical_history', '手术史或重大疾病史'], ['referral_code', '推荐码']] },
+    { section: 'skills', label: '技能', fields: [['name', '技能名称'], ['category', '分类'], ['level', '熟练程度'], ['score', '成绩'], ['evidence', '应用说明']] },
+    { section: 'family', label: '家庭背景', fields: [['relation', '关系'], ['name', '姓名'], ['employer', '工作单位'], ['role', '职务'], ['phone', '联系电话']] },
+    { section: 'additional', label: '附加信息', scalar: true, fields: [['hobbies', '兴趣爱好'], ['specialty', '特长'], ['punishment', '受处分情况'], ['academic_works', '学术专著'], ['patents', '专利成果'], ['law_violation', '违法违纪情况'], ['applied_subsidiary', '是否应聘过本公司'], ['relatives_in_company', '是否有亲友在本公司'], ['medical_history', '手术史或重大疾病史'], ['referral_code', '推荐码'], ['accept_adjustment', '是否接受岗位调剂'], ['siblings_count', '兄弟姐妹数量']] },
     { section: 'self_evaluation', label: '自我评价', single: true, fields: [['self_evaluation', '自我评价']] }
   ];
 
@@ -255,7 +258,7 @@
   function normalize(profile) {
     var base = createEmptyProfile();
     var input = profile || {};
-    var arrayKeys = ['education', 'employment', 'projects', 'honors', 'activities', 'campus_roles', 'skills', 'application_answers', 'custom_fields', 'site_mappings', 'site_drafts', 'label_mappings'];
+    var arrayKeys = ['education', 'employment', 'projects', 'honors', 'activities', 'campus_roles', 'skills', 'family', 'application_answers', 'custom_fields', 'site_mappings', 'site_drafts', 'label_mappings'];
     var objectKeys = ['basic', 'intention', 'additional'];
     Object.keys(base).forEach(function (key) {
       if (key === 'extras') return;
@@ -390,7 +393,7 @@
     addSection('basic', normalized.basic);
     addSection('intention', normalized.intention);
     addSection('additional', normalized.additional);
-    ['education', 'employment', 'projects', 'honors', 'activities', 'campus_roles', 'skills', 'application_answers', 'custom_fields', 'site_mappings', 'site_drafts', 'label_mappings']
+    ['education', 'employment', 'projects', 'honors', 'activities', 'campus_roles', 'skills', 'family', 'application_answers', 'custom_fields', 'site_mappings', 'site_drafts', 'label_mappings']
       .forEach(function (key) {
         var position = 0;
         (normalized[key] || []).forEach(function (record) {

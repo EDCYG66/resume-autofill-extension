@@ -14,22 +14,23 @@ Add-Type -AssemblyName System.Drawing
 $root = Split-Path -Parent $PSScriptRoot
 $required = @(
   'manifest.json','popup.html','popup.js','popup.css','options.html','options.js','options.css',
-  'tokens.css','content.js','profile-parser.js','README.md','LICENSE','.gitignore','.gitattributes',
+  'tokens.css','shared.js','content.js','profile-parser.js','README.md','LICENSE','.gitignore','.gitattributes',
   '模板文件.txt',
   'icons/icon.svg','icons/icon-16.png','icons/icon-32.png','icons/icon-48.png','icons/icon-128.png',
   'tools/make_icons.py','tools/make_extension_key.py','tools/make_popup_fixture.py','tools/pack.ps1',
   '测试/browser.ps1','测试/frame-fixture.html','测试/frame-inner.html','测试/frame-smoke.ps1',
   '测试/load-smoke.ps1','测试/popup-fixture.html','测试/popup-smoke.ps1','测试/appform-fixture.html',
-  '测试/appform-smoke.ps1','测试/dynamic-fixture.html','测试/dynamic-smoke.ps1','测试/pack-smoke.ps1'
+  '测试/appform-smoke.ps1','测试/dynamic-fixture.html','测试/dynamic-smoke.ps1','测试/pack-smoke.ps1',
+  '测试/shared.test.js','测试/shadow-fixture.html','测试/shadow-smoke.ps1'
 )
 foreach ($name in $required) {
   $path = Join-Path $root $name
   if (-not (Test-Path -LiteralPath $path)) { throw "Missing required file: $name" }
 }
 
-$manifest = Get-Content -Raw -LiteralPath (Join-Path $root 'manifest.json') | ConvertFrom-Json
+$manifest = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $root 'manifest.json') | ConvertFrom-Json
 if ($manifest.manifest_version -ne 3) { throw 'Manifest is not MV3' }
-if ($manifest.version -ne '0.3.0') { throw "Expected release version 0.3.0, found $($manifest.version)" }
+if ($manifest.version -ne '0.3.2') { throw "Expected release version 0.3.2, found $($manifest.version)" }
 $actualPermissions = @($manifest.permissions | Sort-Object)
 $expectedPermissions = @('activeTab','scripting','storage')
 if (($actualPermissions -join ',') -ne (($expectedPermissions | Sort-Object) -join ',')) { throw "Unexpected permissions: $($actualPermissions -join ',')" }
@@ -62,13 +63,13 @@ foreach ($relative in $declaredIcons) {
 }
 
 foreach ($page in @('popup.html','options.html')) {
-  $text = Get-Content -Raw -LiteralPath (Join-Path $root $page)
+  $text = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $root $page)
   if (-not $text.Contains('href="tokens.css"')) { throw "$page does not link tokens.css" }
 }
 
 # The blank template is a deliverable, so it has to stay committed. Your own filled-in copies
 # keep the personal file names below and must stay ignored.
-$ignore = Get-Content -Raw -LiteralPath (Join-Path $root '.gitignore')
+$ignore = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $root '.gitignore')
 foreach ($personalName in @('resume-profile.txt','简历模板信息文件.txt','简历资料导出.txt','personal-values.local.txt')) {
   if (-not $ignore.Contains($personalName)) { throw "The personal file name $personalName is not ignored" }
 }
@@ -80,17 +81,17 @@ if (Test-Path -LiteralPath (Join-Path $root '.git')) {
 }
 
 $templatePath = Join-Path $root '模板文件.txt'
-$template = Get-Content -Raw -LiteralPath $templatePath
+$template = Get-Content -Raw -Encoding UTF8 -LiteralPath $templatePath
 if ($template.Contains('[attachments.')) { throw 'Attachment sections must be absent from templates' }
 $activeFiles = @('manifest.json','popup.html','popup.js','options.html','options.js','content.js','profile-parser.js','模板文件.txt')
 foreach ($file in $activeFiles) {
-  $text = Get-Content -Raw -LiteralPath (Join-Path $root $file)
+  $text = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $root $file)
   if ($text -match '附件') { throw "Attachment UI/text found in active file: $file" }
 }
 
 # The content script version must come from the manifest, never from a literal.
 foreach ($name in @('content.js','popup.js')) {
-  $text = Get-Content -Raw -LiteralPath (Join-Path $root $name)
+  $text = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $root $name)
   if ($text -match "CONTENT_VERSION\s*=\s*'") { throw "Hard coded content version in $name" }
   if ($text -match "version\s*===\s*'[0-9]") { throw "Hard coded version comparison in $name" }
 }
@@ -99,13 +100,14 @@ foreach ($name in @('content.js','popup.js')) {
 # value that could be typed into a real form, and round-trip byte for byte. Filling it in place
 # turns any of these into a failure, which is the signal to copy it somewhere else first.
 $env:RESUME_EXTENSION_ROOT = $root
+ $env:RESUME_TEMPLATE_FILE = $templatePath
 $templateCheck = @'
 const fs = require('fs');
 const path = require('path');
 const root = process.env.RESUME_EXTENSION_ROOT;
 const parser = require(path.join(root, 'profile-parser.js'));
 const content = require(path.join(root, 'content.js'));
-const profile = parser.parse(fs.readFileSync(path.join(root, '模板文件.txt'), 'utf8'));
+ const profile = parser.parse(fs.readFileSync(process.env.RESUME_TEMPLATE_FILE, 'utf8'));
 const offered = content.flattenProfile(profile);
 if (offered.length) throw new Error('The shipped template offers ' + offered.length + ' values; it must ship blank');
 const extras = Object.keys(profile.extras);
@@ -138,7 +140,7 @@ if (Test-Path -LiteralPath $zipPath) {
 # personal-values.local.txt is git-ignored, so the scan is skipped on a fresh clone.
 $personalFile = Join-Path $root 'personal-values.local.txt'
 if (Test-Path -LiteralPath $personalFile) {
-  $personalValues = @(Get-Content -LiteralPath $personalFile | ForEach-Object { $_.Trim() } | Where-Object { $_ -and $_[0] -ne '#' })
+  $personalValues = @(Get-Content -Encoding UTF8 -LiteralPath $personalFile | ForEach-Object { $_.Trim() } | Where-Object { $_ -and $_[0] -ne '#' })
   $textExtensions = @('.js','.html','.css','.json','.md','.txt','.ps1','.py')
   # 身份证正面/反面 scans of the document itself. Bare 身份证 is only the name of a document
   # type and is a legitimate enum value for id_type, so it is not treated as a leak.
@@ -161,7 +163,7 @@ if (Test-Path -LiteralPath $personalFile) {
       $global:LASTEXITCODE = 0
       if ($isIgnored) { continue }
     }
-    $text = Get-Content -Raw -LiteralPath $file.FullName
+    $text = Get-Content -Raw -Encoding UTF8 -LiteralPath $file.FullName
     foreach ($secret in $personalValues + @('身份证正面','身份证反面')) {
       if ($text.Contains($secret)) { throw "Personal value found in ${relative}: $secret" }
     }

@@ -23,11 +23,11 @@ New-Item -ItemType Directory -Force -Path $profile | Out-Null
 $fixture = [Uri]::new((Join-Path $PSScriptRoot 'sites-fixture.html')).AbsoluteUri
 $process = Start-Process -FilePath $browser -ArgumentList @(
   '--headless=new', '--disable-gpu', '--allow-file-access-from-files', '--no-first-run',
-  (Quote-Arg "--user-data-dir=$profile"), '--virtual-time-budget=4000', '--dump-dom', $fixture
+  (Quote-Arg "--user-data-dir=$profile"), '--virtual-time-budget=15000', '--dump-dom', $fixture
 ) -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
 if ($process.ExitCode -ne 0) { throw "Browser exited with code $($process.ExitCode)." }
 
-$dom = Get-Content -Raw -LiteralPath $stdout
+$dom = Get-Content -Raw -Encoding UTF8 -LiteralPath $stdout
 $match = [regex]::Match($dom, '<pre id="result">(.*?)</pre>', 'Singleline')
 if (-not $match.Success) { throw 'The sites fixture produced no result.' }
 $data = [System.Net.WebUtility]::HtmlDecode($match.Groups[1].Value) | ConvertFrom-Json

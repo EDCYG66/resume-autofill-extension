@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>简历填充助手</title>
-  <link rel="stylesheet" href="tokens.css">
-  <link rel="stylesheet" href="popup.css">
+  <title>popup fixture (generated from popup.html)</title>
+  <link rel="stylesheet" href="../tokens.css">
+  <link rel="stylesheet" href="../popup.css">
 </head>
 <body>
   <main class="popup-container">
@@ -144,8 +144,56 @@
     </div>
   </main>
 
-  <script src="profile-parser.js"></script>
-  <script src="shared.js"></script>
-  <script src="popup.js"></script>
+  <script>
+    var CANDIDATES = [{
+      label: '学习经历', profileKey: null, proposedValue: '', confidence: 'none',
+      currentValue: '', selected: false, isNewField: true, sensitive: false,
+      remember: false, customKey: '', customLabel: '学习经历', customCategory: '自己加的',
+      fingerprint: 'text:studyexp', controlType: 'input', siteKey: 'https://example.com'
+    }, {
+      // Scans as an ordinary high-confidence match, but it is sensitive, so it must not be
+      // ticked for the applicant.
+      label: '身份证号', profileKey: 'basic.id_number', proposedValue: '210000200001010000',
+      confidence: 'high', currentValue: '', selected: false, isNewField: false,
+      sensitive: true, remember: false, fingerprint: 'text:idnumber',
+      controlType: 'input', siteKey: 'https://example.com'
+    }];
+    window.__saved = null;
+    window.__lastScan = null;
+    window.__filled = null;
+    window.chrome = {
+      runtime: { lastError: null, getManifest: function () { return { version: '0.3.2' }; }, openOptionsPage: function () {} },
+      storage: { local: {
+        get: function (defaults, callback) { callback({ resumeProfile: { basic: { name: '示例姓名', id_number: '210000200001010000' }, education: [{ school: '示例大学', major: '电子信息', courses: ['电路原理'] }], additional: { specialty: '长跑', hobbies: '摄影' } }, resumeAccent: '#0078d4', resumeLastScan: { url: 'https://example.com/apply', siteKey: 'https://example.com', activeFilter: 'all', candidates: CANDIDATES } }); },
+        set: function (value, callback) { if (value.resumeLastScan) window.__lastScan = value.resumeLastScan; else window.__saved = value; if (callback) callback(); }
+      } },
+      tabs: {
+        query: function (query, callback) { callback([{ id: 1, url: 'https://example.com/apply' }]); },
+        sendMessage: function (tabId, message, callback) {
+          if (message.type === 'ping') return callback({ version: '0.3.2' });
+          if (message.type === 'scan') return callback({ candidates: CANDIDATES });
+          if (message.type === 'fill') { window.__filled = message.fields; return callback({ results: [{ id: 'x', status: 'filled' }] }); }
+          callback({ results: [] });
+        }
+      },
+      scripting: { executeScript: function (options, callback) { if (callback) callback(); } }
+    };
+  </script>
+  <script src="../profile-parser.js"></script>
+  <script src="../shared.js"></script>
+  <script src="../popup.js"></script>
+  <pre id="smoke-result"></pre>
+  <script>
+    setTimeout(function () {
+      var review = document.getElementById('review');
+      var rows = Array.prototype.slice.call(document.querySelectorAll('.candidate'));
+      document.getElementById('smoke-result').textContent = JSON.stringify({
+        restored: Boolean(review) && !review.hidden,
+        rows: rows.length,
+        badges: rows.map(function (card) { return (card.querySelector('.confidence') || {}).textContent; }),
+        status: document.getElementById('profileStatus').textContent
+      });
+    }, 150);
+  </script>
 </body>
 </html>

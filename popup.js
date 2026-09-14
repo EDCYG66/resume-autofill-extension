@@ -1,28 +1,16 @@
 (function () {
   'use strict';
-  var MERGE_KEYS = {
-    custom_fields: ['key'],
-    site_mappings: ['site_key', 'fingerprint', 'profile_key'],
-    site_drafts: ['site_key', 'fingerprint', 'profile_key'],
-    label_mappings: ['label', 'profile_key']
-  };
-  var STORED_WINS = { site_drafts: true };
-  var DEFAULT_ACCENT = '#0078d4';
+  // Shared with the options page: the three-way merge, the stored accent and the storage round
+  // trips live in shared.js, so the two pages cannot drift apart.
+  var store = ResumeShared.createStore();
   var state = {
     profile: ResumeProfile.createEmptyProfile(),
-    baseline: {},
     candidates: [],
     activeFilter: 'all',
-    activeTab: 'fill'
+    activeTab: 'fill',
+    lastScanTab: null
   };
 
-  function mergeInto(target, stored) {
-    Object.keys(MERGE_KEYS).forEach(function (key) {
-      var current = Array.isArray(target[key]) ? target[key] : [];
-      var merged = ResumeProfile.mergeRecords(state.baseline[key] || [], current, stored[key] || [], MERGE_KEYS[key], Boolean(STORED_WINS[key]));
-      target[key] = ResumeProfile.replaceRecords(current, merged);
-    });
-  }
   var $ = function (id) { return document.getElementById(id); };
   var status = $('profileStatus');
 
@@ -30,12 +18,6 @@
     if (!status) return;
     status.textContent = message;
     status.classList.toggle('is-error', Boolean(error));
-  }
-  function captureBaseline(profile) {
-    state.baseline = {};
-    Object.keys(MERGE_KEYS).forEach(function (key) {
-      state.baseline[key] = (profile[key] || []).map(function (record) { return Object.assign({}, record); });
-    });
   }
   function profileIsEmpty(profile) {
     if (!profile) return true;
@@ -46,32 +28,61 @@
     if ((profile.education || []).length) return false;
     return true;
   }
-  function applyAccent(color) {
-    if (!color) return;
-    document.documentElement.style.setProperty('--accent', String(color));
-  }
   function readProfile() {
-    return new Promise(function (resolve) {
-      chrome.storage.local.get({ resumeProfile: ResumeProfile.createEmptyProfile(), resumeAccent: DEFAULT_ACCENT }, function (data) {
-        state.profile = ResumeProfile.normalize(data.resumeProfile);
-        captureBaseline(state.profile);
-        applyAccent(data.resumeAccent);
-        resolve(state.profile);
-      });
+    return store.loadProfile().then(function (loaded) {
+      state.profile = loaded.profile;
+      ResumeShared.applyAccent(loaded.accent);
+      return state.profile;
     });
   }
   function extensionVersion() {
     try { return chrome.runtime.getManifest().version || ''; } catch (_) { return ''; }
   }
+  // The shared store owns the merge; this only mirrors the result back into the page state the
+  // rest of the popup renders from.
   function saveProfile(profile) {
-    state.profile = ResumeProfile.normalize(profile);
+    return store.saveProfile(profile).then(function (saved) {
+      state.profile = saved;
+      return saved;
+    });
+  }
+  function persistLastScan() {
+    if (!state.lastScanTab || !state.candidates.length || !chrome.storage || !chrome.storage.local) return;
+    var candidates;
+    try { candidates = JSON.parse(JSON.stringify(state.candidates)); } catch (_) { return; }
+    chrome.storage.local.set({
+      resumeLastScan: {
+        url: state.lastScanTab.url,
+        siteKey: state.siteKey || '',
+        activeFilter: state.activeFilter || 'all',
+        candidates: candidates,
+        savedAt: new Date().toISOString()
+      }
+    }, function () {});
+  }
+  // Every tick and edit flows through updateActionState, and the popup dies the moment the
+  // applicant clicks the page, so the writes are coalesced and the close is caught as well.
+  var persistTimer = null;
+  function schedulePersistLastScan() {
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = setTimeout(function () { persistTimer = null; persistLastScan(); }, 250);
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') persistLastScan();
+  });
+  function restoreLastScan(tab) {
+    if (!tab || !chrome.storage || !chrome.storage.local) return Promise.resolve(false);
     return new Promise(function (resolve) {
-      chrome.storage.local.get({ resumeProfile: ResumeProfile.createEmptyProfile() }, function (data) {
-        mergeInto(state.profile, ResumeProfile.normalize(data.resumeProfile));
-        chrome.storage.local.set({ resumeProfile: state.profile }, function () {
-          captureBaseline(state.profile);
-          resolve();
-        });
+      chrome.storage.local.get({ resumeLastScan: null }, function (data) {
+        var saved = data && data.resumeLastScan;
+        if (!saved || saved.url !== tab.url || !Array.isArray(saved.candidates) || !saved.candidates.length) return resolve(false);
+        state.lastScanTab = { id: tab.id, url: tab.url };
+        state.siteKey = saved.siteKey || '';
+        state.activeFilter = saved.activeFilter || 'all';
+        state.candidates = saved.candidates;
+        $('review').hidden = false;
+        renderCandidates();
+        resolve(true);
       });
     });
   }
@@ -181,6 +192,10 @@
       selectAllBox.checked = visibleCandidates.length > 0 && visibleSelected === visibleCandidates.length;
       selectAllBox.indeterminate = visibleSelected > 0 && visibleSelected < visibleCandidates.length;
     }
+
+    // Keep the stored copy in step with what is on screen, so reopening the popup shows the
+    // same ticks and edited values the applicant just set.
+    schedulePersistLastScan();
   }
 
   function refreshFillLabel() {
@@ -672,12 +687,14 @@
     }).then(function (result) {
       var tab = result.tab;
       var response = result.response;
+      state.lastScanTab = { id: tab.id, url: tab.url };
       state.candidates = (response.candidates || []).map(function (candidate) {
         candidate.selected = !candidate.sensitive && !candidate.isNewField && candidate.confidence === 'high' && Boolean(candidate.proposedValue);
         return candidate;
       });
       $('review').hidden = false;
       renderCandidates();
+      persistLastScan();
       var remembered = state.candidates.filter(function (item) { return item.remember && !item.isNewField && !item.sensitive; });
       if (remembered.length) messageTab(tab.id, { type: 'remember', fields: remembered, siteKey: state.siteKey || '' }).catch(function () {});
 
@@ -817,6 +834,8 @@
         saveProfile(profile).then(function () {
           setStatus('简历资料导入成功，已就绪！');
           renderQuickCopy('');
+        }).catch(function (error) {
+          setStatus('资料保存失败：' + (error && error.message ? error.message : '未知错误'), true);
         });
       }
       catch (error) { setStatus('导入失败：' + error.message, true); }
@@ -825,14 +844,18 @@
   });
 
   $('exportProfile').addEventListener('click', function () {
-    var blob = new Blob([ResumeProfile.stringify(state.profile)], { type: 'text/plain;charset=utf-8' });
-    var url = URL.createObjectURL(blob);
-    var link = document.createElement('a');
-    link.href = url;
-    link.download = '简历资料导出.txt';
-    link.click();
-    URL.revokeObjectURL(url);
-    setStatus('简历资料已导出到本地。');
+    try {
+      var blob = new Blob([ResumeProfile.stringify(state.profile)], { type: 'text/plain;charset=utf-8' });
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement('a');
+      link.href = url;
+      link.download = '简历资料导出.txt';
+      link.click();
+      URL.revokeObjectURL(url);
+      setStatus('简历资料已导出到本地。');
+    } catch (error) {
+      setStatus('导出失败：' + (error && error.message ? error.message : '未知错误'), true);
+    }
   });
 
   $('openOptions').addEventListener('click', function () { chrome.runtime.openOptionsPage(); });
@@ -842,9 +865,16 @@
   setupQuickCopyEvents();
 
   readProfile().then(function () {
-    setStatus(profileIsEmpty(state.profile) ?
+    var readyMessage = profileIsEmpty(state.profile) ?
       '资料库尚为空白。请先点击右上角“导入资料”，或打开设置填写你的简历。' :
-      '资料已就绪。打开招聘网页后，点击下方“看看这页要填什么”即可开始。'
-    );
+      '资料已就绪。打开招聘网页后，点击下方“看看这页要填什么”即可开始。';
+    setStatus(readyMessage);
+    // Chrome closes the panel as soon as the applicant clicks the page, and reopening used to
+    // start from nothing. Bring the previous scan back when the page is still the same one.
+    return activeTab().then(function (tab) { return restoreLastScan(tab); }).then(function (restored) {
+      if (restored) setStatus('已恢复上次的扫描结果（共 ' + state.candidates.length + ' 处）。确认后可直接点“帮我填上”。');
+    }).catch(function () {});
+  }).catch(function (error) {
+    setStatus('本地资料读取失败：' + (error && error.message ? error.message : '未知错误'), true);
   });
 }());

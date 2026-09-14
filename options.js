@@ -20,59 +20,39 @@
     custom_fields: '<path d="M3.25 9.85V4.75a1.5 1.5 0 0 1 1.5-1.5h5.1a1.5 1.5 0 0 1 1.06.44l6.05 6.05a1.5 1.5 0 0 1 0 2.12l-5.1 5.1a1.5 1.5 0 0 1-2.12 0l-6.05-6.05a1.5 1.5 0 0 1-.44-1.06Z"/><circle cx="7" cy="7" r="1.05"/>'
   };
   // Accent choices mirror the Windows personalisation palette.
-  var ACCENTS = ['#0078d4', '#0099bc', '#00b294', '#107c10', '#8764b8', '#c239b3', '#ca5010', '#e81123'];
+  var ACCENTS = [ResumeShared.DEFAULT_ACCENT, '#0099bc', '#00b294', '#107c10', '#8764b8', '#c239b3', '#ca5010', '#e81123'];
   var DEFAULT_ACCENT = ACCENTS[0];
   var accent = DEFAULT_ACCENT;
   var tabs = [
     ['basic', '基本信息'], ['intention', '求职意向'], ['additional', '附加信息'], ['education', '教育经历'],
     ['employment', '工作/实习'], ['projects', '项目经历'], ['honors', '荣誉奖励'],
-    ['activities', '实践活动'], ['campus_roles', '校内职务'], ['skills', '技能'],
+    ['activities', '实践活动'], ['campus_roles', '校内职务'], ['skills', '技能'], ['family', '家庭背景'],
     ['self_evaluation', '自我评价'], ['application_answers', '网申问答'], ['custom_fields', '我加的项']
   ];
   var scalarFields = {
     basic: [['name', '姓名'], ['gender', '性别'], ['birth_date', '出生日期', 'date'], ['age', '年龄'], ['work_start_date', '参加工作时间'], ['work_years', '工作经验'], ['ethnicity', '民族'], ['native_place', '籍贯'], ['political_status', '政治面貌'], ['marital_status', '婚姻状况'], ['household_registration', '户口所在地'], ['place_of_origin', '生源地'], ['current_residence', '现居住地'], ['mailing_address', '通信地址', 'wide'], ['phone', '联系电话'], ['phone_code', '手机区号 / 类别（如 +86 / 中国大陆）'], ['email', '邮箱'], ['wechat', '微信'], ['qq', 'QQ'], ['id_type', '证件类型'], ['id_number', '身份证号'], ['has_children', '有无子女'], ['emergency_contact', '紧急联系人'], ['emergency_phone', '紧急联系电话'], ['height', '身高（cm，只填数字）'], ['weight', '体重（kg，只填数字）']],
     intention: [['target_role', '期望职位'], ['industry', '期望行业', 'wide'], ['city', '期望城市'], ['salary', '期望薪资'], ['employment_type', '工作性质'], ['interview_site', '面试站点'], ['available_date', '可到岗时间']],
-    additional: [['hobbies', '兴趣爱好', 'wide'], ['specialty', '特长', 'wide'], ['punishment', '受处分情况', 'wide'], ['academic_works', '学术专著', 'wide'], ['patents', '专利成果', 'wide'], ['law_violation', '违法违纪情况'], ['applied_subsidiary', '是否应聘过本公司'], ['relatives_in_company', '是否有亲友在本公司'], ['medical_history', '手术史或重大疾病史', 'wide'], ['referral_code', '推荐码']]
+    additional: [['hobbies', '兴趣爱好', 'wide'], ['specialty', '特长', 'wide'], ['punishment', '受处分情况', 'wide'], ['academic_works', '学术专著', 'wide'], ['patents', '专利成果', 'wide'], ['law_violation', '违法违纪情况'], ['applied_subsidiary', '是否应聘过本公司'], ['relatives_in_company', '是否有亲友在本公司'], ['medical_history', '手术史或重大疾病史', 'wide'], ['referral_code', '推荐码'], ['accept_adjustment', '是否接受岗位调剂'], ['siblings_count', '兄弟姐妹数量']]
   };
   var recordFields = {
-    education: [['school', '学校'], ['college', '学院'], ['start_date', '开始时间', 'period'], ['end_date', '结束时间', 'period'], ['duration_years', '学制（年）'], ['level', '学历'], ['admission_type', '招生类型'], ['study_mode', '学习形式'], ['graduate_type', '应届往届'], ['degree_certificate', '学位证'], ['degree_name', '学位名称'], ['major', '专业'], ['second_major', '第二专业'], ['major_category', '专业分类'], ['major_rank', '专业排名'], ['gpa', '绩点/均分'], ['english_level', '英语等级'], ['english_score', '英语等级成绩'], ['research_direction', '研究方向', 'wide'], ['advisor', '导师'], ['thesis_title', '毕业论文题目', 'full'], ['description', '教育经历描述', 'full']],
+    education: [['school', '学校'], ['college', '学院'], ['student_id', '学号'], ['start_date', '开始时间', 'period'], ['end_date', '结束时间', 'period'], ['duration_years', '学制（年）'], ['level', '学历'], ['admission_type', '招生类型'], ['study_mode', '学习形式'], ['graduate_type', '应届往届'], ['degree_certificate', '学位证'], ['degree_name', '学位名称'], ['major', '专业'], ['second_major', '第二专业'], ['major_category', '专业分类'], ['major_rank', '专业排名'], ['major_rank_percent', '专业排名（百分比）'], ['gpa', '绩点/均分'], ['gpa_max', '满分平均学分绩点'], ['weighted_score', '加权平均分'], ['score_max', '满分'], ['has_failed_course', '是否有挂科经历'], ['english_level', '英语等级'], ['english_score', '英语等级成绩'], ['research_direction', '研究方向', 'wide'], ['advisor', '导师'], ['thesis_title', '毕业论文题目', 'full'], ['description', '教育经历描述', 'full']],
     employment: [['employer', '单位'], ['role', '职位'], ['start_date', '开始时间', 'period'], ['end_date', '结束时间', 'period'], ['employer_type', '单位性质'], ['location', '工作地点'], ['project_name', '项目名称'], ['salary', '税前月薪']],
     projects: [['name', '项目名称'], ['start_date', '开始时间', 'period'], ['end_date', '结束时间', 'period'], ['role', '担任角色'], ['organization', '项目单位'], ['participant_count', '参加人数'], ['research_direction', '研究方向', 'wide'], ['introduction', '项目介绍', 'full'], ['outcomes', '项目成果', 'full'], ['related_paper', '相关论文', 'wide']],
     honors: [['name', '荣誉名称'], ['date', '获得时间', 'period'], ['issuer', '颁发单位'], ['description', '说明', 'full']],
     activities: [['name', '活动名称'], ['start_date', '开始时间', 'period'], ['end_date', '结束时间', 'period'], ['role', '身份/角色'], ['organization', '组织'], ['description', '活动描述', 'full']],
     campus_roles: [['organization', '组织/学校'], ['role', '职务'], ['start_date', '开始时间', 'period'], ['end_date', '结束时间', 'period'], ['gains', '任职收获', 'full']],
-    skills: [['category', '分类'], ['name', '技能名称'], ['level', '熟练程度'], ['evidence', '应用说明', 'wide']],
+    skills: [['category', '分类'], ['name', '技能名称'], ['level', '熟练程度'], ['score', '成绩'], ['evidence', '应用说明', 'wide']],
+    family: [['relation', '关系'], ['name', '姓名'], ['employer', '工作单位'], ['role', '职务'], ['phone', '联系电话']],
     application_answers: [['question', '题目', 'wide'], ['answer', '回答', 'full']],
     custom_fields: [['key', '名称'], ['label', '显示标签'], ['category', '分类'], ['value', '默认内容', 'wide'], ['field_type', '类型']]
   };
   var arrayFields = { education: ['courses', '课程'], employment: ['duties', '工作内容'], projects: ['duties', '项目职责'], skills: ['skills', '相关技能'], campus_roles: ['duties', '工作内容'], custom_fields: ['aliases', '网页上的其他叫法'] };
 
-  var MERGE_KEYS = {
-    custom_fields: ['key'],
-    site_mappings: ['site_key', 'fingerprint', 'profile_key'],
-    site_drafts: ['site_key', 'fingerprint', 'profile_key'],
-    label_mappings: ['label', 'profile_key']
-  };
-  var baseline = {};
-  var STORED_WINS = { site_drafts: true };
-  function mergeInto(target, stored) {
-    Object.keys(MERGE_KEYS).forEach(function (key) {
-      var current = Array.isArray(target[key]) ? target[key] : [];
-      var merged = ResumeProfile.mergeRecords(baseline[key] || [], current, stored[key] || [], MERGE_KEYS[key], Boolean(STORED_WINS[key]));
-      target[key] = ResumeProfile.replaceRecords(current, merged);
-    });
-  }
-  function captureBaseline(source) {
-    baseline = {};
-    Object.keys(MERGE_KEYS).forEach(function (key) {
-      baseline[key] = (source[key] || []).map(function (record) { return Object.assign({}, record); });
-    });
-  }
+  // The three-way merge and the accent live in shared.js, which the popup loads too, so the two
+  // pages cannot drift apart.
+  var store = ResumeShared.createStore();
   // Only the base accent is stored; hover and pressed steps derive from it in CSS.
-  function applyAccent(color) {
-    if (!color) return;
-    document.documentElement.style.setProperty('--accent', String(color));
-  }
+  var applyAccent = ResumeShared.applyAccent;
   function renderAccentPicker() {
     var wrap = $('accentPicker');
     if (!wrap) return;
@@ -110,15 +90,19 @@
   }
 
   function save() {
-    return new Promise(function (resolve) {
-      chrome.storage.local.get({ resumeProfile: ResumeProfile.createEmptyProfile() }, function (data) {
-        mergeInto(profile, ResumeProfile.normalize(data.resumeProfile));
-        captureBaseline(profile);
-        chrome.storage.local.set({ resumeProfile: ResumeProfile.normalize(profile) }, resolve);
-      });
+    return store.saveProfile(profile).then(function (saved) {
+      // The editor renders from this object, so keep the merged result on screen.
+      profile = saved;
+      return saved;
     });
   }
-  function load() { return new Promise(function (resolve) { chrome.storage.local.get({ resumeProfile: ResumeProfile.createEmptyProfile(), resumeAccent: DEFAULT_ACCENT }, function (data) { profile = ResumeProfile.normalize(data.resumeProfile); accent = data.resumeAccent || DEFAULT_ACCENT; applyAccent(accent); captureBaseline(profile); resolve(); }); }); }
+  function load() {
+    return store.loadProfile().then(function (loaded) {
+      profile = loaded.profile;
+      accent = loaded.accent || DEFAULT_ACCENT;
+      applyAccent(accent);
+    });
+  }
   // A period keeps month precision valid ("2024-09") while allowing day precision
   // ("2024-09-18"). A native date input cannot represent the month-only form: it would
   // blank the field and the next save would drop the value, so this stays a text input.
@@ -158,7 +142,10 @@
     law_violation: ['无', '有'],
     applied_subsidiary: ['否', '是'],
     relatives_in_company: ['否', '是'],
-    medical_history: ['无', '有']
+    medical_history: ['无', '有'],
+    has_failed_course: ['否', '是'],
+    accept_adjustment: ['是', '否'],
+    relation: ['父亲', '母亲', '配偶', '其他']
   };
   function field(key, label, value, kind) {
     var wrapper = document.createElement('div'); wrapper.className = 'field ' + (kind === 'wide' ? 'wide' : kind === 'full' ? 'full' : '');
@@ -280,10 +267,26 @@
       tabWrap.appendChild(button);
     });
     var editor = $('editor'); editor.textContent = ''; if (activeSection === 'self_evaluation') editor.appendChild(renderSelfEvaluation()); else if (scalarFields[activeSection]) editor.appendChild(renderScalar(activeSection)); else if (activeSection === 'custom_fields') editor.appendChild(renderCustomFields()); else editor.appendChild(renderRecords(activeSection)); }
-  $('saveButton').addEventListener('click', function () { save().then(function () { $('status').textContent = '已保存。'; }); });
+  $('saveButton').addEventListener('click', function () {
+    save().then(function () { $('status').textContent = '已保存。'; })
+      .catch(function (error) { $('status').textContent = '保存失败：' + (error && error.message ? error.message : '未知错误'); });
+  });
   $('importButton').addEventListener('click', function () { $('fileInput').click(); });
-  $('fileInput').addEventListener('change', function () { var file = $('fileInput').files[0]; if (!file) return; var reader = new FileReader(); reader.onload = function () { try { profile = ResumeProfile.parse(reader.result); render(); save().then(function () { $('status').textContent = '模板导入成功，重复本科记录已合并。'; }); } catch (error) { $('status').textContent = '导入失败：' + error.message; } }; reader.readAsText(file, 'utf-8'); });
-  $('exportButton').addEventListener('click', function () { var blob = new Blob([ResumeProfile.stringify(profile)], { type: 'text/plain;charset=utf-8' }); var url = URL.createObjectURL(blob); var link = document.createElement('a'); link.href = url; link.download = '简历资料导出.txt'; link.click(); URL.revokeObjectURL(url); $('status').textContent = '资料已导出到本地。'; });
+  $('fileInput').addEventListener('change', function () { var file = $('fileInput').files[0]; if (!file) return; var reader = new FileReader(); reader.onload = function () { try { profile = ResumeProfile.parse(reader.result); render(); save().then(function () { $('status').textContent = '模板导入成功，重复本科记录已合并。'; }).catch(function (error) { $('status').textContent = '导入后保存失败：' + (error && error.message ? error.message : '未知错误'); }); } catch (error) { $('status').textContent = '导入失败：' + error.message; } }; reader.readAsText(file, 'utf-8'); });
+  $('exportButton').addEventListener('click', function () {
+    try {
+      var blob = new Blob([ResumeProfile.stringify(profile)], { type: 'text/plain;charset=utf-8' });
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement('a');
+      link.href = url;
+      link.download = '简历资料导出.txt';
+      link.click();
+      URL.revokeObjectURL(url);
+      $('status').textContent = '资料已导出到本地。';
+    } catch (error) {
+      $('status').textContent = '导出失败：' + (error && error.message ? error.message : '未知错误');
+    }
+  });
   var navToggle = $('navToggle');
   if (navToggle) {
     navToggle.addEventListener('click', function () {

@@ -31,7 +31,7 @@ function Get-TestBrowser {
   # Handy when the newest Chrome ignores --load-extension but an older Chromium build is around.
   $localFile = Join-Path $PSScriptRoot 'browser.local.txt'
   if (Test-Path -LiteralPath $localFile) {
-    $localPath = Get-Content -LiteralPath $localFile |
+    $localPath = Get-Content -Encoding UTF8 -LiteralPath $localFile |
       Where-Object { $_ -and $_.Trim() -and -not $_.Trim().StartsWith('#') } |
       ForEach-Object { $_.Trim() } |
       Select-Object -First 1

@@ -7,8 +7,44 @@
   <section class="resume-section" data-section="english"><h2>英语能力 <em>必填</em></h2><div class="field-card"><label for="english-certificate">英语证书名称*</label><div id="english-certificate" role="combobox" aria-haspopup="listbox" tabindex="0" class="el-select"><span class="placeholder">请选择英语证书名称</span></div><div role="listbox" hidden><div role="option">大学英语四级</div><div role="option">大学英语六级</div></div></div></section>
   <section class="resume-section" data-section="other-language"><h2>其他外语能力</h2><button type="button">添加新的其他外语能力</button></section>
   <section class="resume-section" data-section="computer"><h2>计算机技能</h2><div class="field-card"><label for="computer-certificate">证书名称</label><div id="computer-certificate" role="combobox" aria-haspopup="listbox" tabindex="0" class="el-select"><span class="placeholder">请选择证书名称</span></div><div role="listbox" hidden><div role="option">全国计算机等级考试</div><div role="option">其他</div></div></div></section>
+  <!-- A picker-managed date box: typing leaves the value on screen, but only picking a day in
+       the calendar panel updates the page's own state. -->
+  <section class="resume-section" data-section="education"><h2>教育经历</h2><div class="field-card">
+    <label for="grad-date">毕业时间</label>
+    <div class="el-date-editor el-input"><input id="grad-date" class="el-input__inner" autocomplete="off"></div>
+  </div></section>
+  <!-- Custom-styled radios: the real input is transparent and the 性别 group carries no name
+       attribute, which is how React radio groups are usually rendered. -->
+  <section class="resume-section" data-section="basic"><h2>个人基本信息</h2>
+    <div class="field-card ant-form-item">
+      <div class="ant-form-item-label"><label>性别</label></div>
+      <div class="ant-radio-group">
+        <label class="ant-radio-wrapper"><span class="ant-radio"><input type="radio" class="ant-radio-input" id="gender-male" value="男" style="opacity:0;position:absolute"><span class="ant-radio-inner"></span></span><span>男</span></label>
+        <label class="ant-radio-wrapper"><span class="ant-radio"><input type="radio" class="ant-radio-input" id="gender-female" value="女" style="opacity:0;position:absolute"><span class="ant-radio-inner"></span></span><span>女</span></label>
+      </div>
+    </div>
+    <div class="field-card el-form-item">
+      <label class="el-form-item__label">有无子女</label>
+      <div class="el-radio-group">
+        <label class="el-radio"><input type="radio" class="el-radio__original" id="child-yes" name="hasChildren" value="有" style="opacity:0;position:absolute"><span class="el-radio__label">有</span></label>
+        <label class="el-radio"><input type="radio" class="el-radio__original" id="child-no" name="hasChildren" value="无" style="opacity:0;position:absolute"><span class="el-radio__label">无</span></label>
+      </div>
+    </div>
+  </section>
+  <!-- 国聘-style column: the trigger carries no library class, and its menu lives outside the
+       field instead of next to it, which is the layout the generic popup scan has to cover. -->
+  <section class="resume-section" data-section="basic"><h2>个人基本信息</h2><div class="field-card"><label for="marital">婚姻状况</label><div id="marital" role="combobox" aria-haspopup="listbox" tabindex="0" class="marital-picker"><span class="placeholder">请选择婚姻状况</span></div></div></section>
   <button type="submit">保存并下一步</button>
 </form>
+<div id="marital-popup" class="form-popup" hidden style="position:absolute;left:0;top:0"><div class="option-item">未婚</div><div class="option-item">已婚</div></div>
+<div id="grad-panel" class="el-picker-panel el-date-picker" hidden style="position:absolute;left:0;top:0">
+  <div class="el-date-picker__header"><span class="el-date-picker__header-label">2027 年</span><span class="el-date-picker__header-label">6 月</span></div>
+  <table class="el-date-table"><tbody><tr>
+    <td class="available"><span class="el-date-table-cell__text">14</span></td>
+    <td class="available"><span class="el-date-table-cell__text">15</span></td>
+    <td class="available"><span class="el-date-table-cell__text">16</span></td>
+  </tr></tbody></table>
+</div>
 <pre id="output"></pre>
   <script src="../content.js"></script>
 <script>
@@ -18,15 +54,51 @@
   document.querySelectorAll('[role="combobox"]').forEach(function (control) {
     control.addEventListener('click', function () { window.__opened += 1; var list = control.nextElementSibling; if (list) list.hidden = false; });
   });
-  var profile = { basic: { name: '测试姓名', phone: '13800138000', email: 'example@example.com' }, intention: { target_role: '电气工程师' }, self_evaluation: '测试自我评价文本', skills: [{ category: '英语', name: '大学英语四级、六级', level: '已通过' }, { category: '编程与算法', name: 'Python', level: '熟悉' }] };
+  // Picking an option behaves like a real select: the visible text changes and the menu closes.
+  document.querySelectorAll('form [role="listbox"]').forEach(function (list) {
+    list.addEventListener('click', function (event) {
+      var option = event.target && event.target.closest ? event.target.closest('[role="option"]') : null;
+      if (!option) return;
+      var control = list.previousElementSibling;
+      var placeholder = control && control.querySelector ? control.querySelector('.placeholder') : null;
+      if (placeholder) placeholder.textContent = option.textContent;
+      list.hidden = true;
+    });
+  });
+  // The 国聘-style menu: opened by a click on the trigger, rendered far away from it.
+  document.getElementById('marital').addEventListener('click', function () {
+    document.getElementById('marital-popup').hidden = false;
+  });
+  document.querySelectorAll('#marital-popup .option-item').forEach(function (item) {
+    item.addEventListener('click', function () {
+      document.querySelector('#marital .placeholder').textContent = item.textContent;
+      document.getElementById('marital-popup').hidden = true;
+    });
+  });
+  // The calendar panel commits the date the way Element Plus does: only a day cell click
+  // reaches the page's model.
+  var gradInput = document.getElementById('grad-date');
+  var gradPanel = document.getElementById('grad-panel');
+  window.__gradCommitted = '';
+  gradInput.addEventListener('click', function () { gradPanel.hidden = false; });
+  gradPanel.addEventListener('click', function (event) {
+    var target = event.target;
+    var cell = target.querySelector ? target.querySelector('.el-date-table-cell__text') : null;
+    var day = (cell ? cell.textContent : target.textContent || '').trim();
+    if (!/^\d{1,2}$/.test(day)) return;
+    window.__gradCommitted = '2027-06-' + (day.length < 2 ? '0' + day : day);
+    gradInput.value = window.__gradCommitted;
+    gradPanel.hidden = true;
+  });
+  var profile = { basic: { name: '测试姓名', phone: '13800138000', email: 'example@example.com', marital_status: '未婚', gender: '男', has_children: '无' }, intention: { target_role: '电气工程师' }, education: [{ end_date: '2027-06-15' }], self_evaluation: '测试自我评价文本', skills: [{ category: '英语', name: '大学英语四级、六级', level: '已通过' }, { category: '编程与算法', name: 'Python', level: '熟悉' }] };
   try {
     var candidates = ResumeContent.scan(profile, { siteKey: 'https://recruit.example.com' });
     var summary = candidates.map(function (item) { return { label: item.label, key: item.profileKey, proposed: item.proposedValue, isNew: item.isNewField, confidence: item.confidence, type: item.controlType }; });
     var selected = candidates.filter(function (item) { return item.proposedValue && !item.isNewField && item.controlType !== 'div'; });
     var dynamicSelected = candidates.filter(function (item) { return item.proposedValue && !item.isNewField && item.controlType === 'div'; });
     var fillPromise = ResumeContent.fill(selected.concat(dynamicSelected));
-    document.querySelector('#output').textContent = JSON.stringify({ summary: summary, state: { evaluation: document.querySelector('#evaluation').value, englishOpen: window.__opened, submitAttempts: window.submitAttempts }, pendingFill: Boolean(fillPromise && fillPromise.then) });
-    setTimeout(function () { fillPromise.then(function (results) { document.querySelector('#output').textContent = JSON.stringify({ summary: summary, results: results, state: { evaluation: document.querySelector('#evaluation').value, englishOpen: window.__opened, submitAttempts: window.submitAttempts } }); }); }, 1000);
+    document.querySelector('#output').textContent = JSON.stringify({ summary: summary, state: { evaluation: document.querySelector('#evaluation').value, englishOpen: window.__opened, marital: document.querySelector('#marital').textContent, gender: document.querySelector('#gender-male').checked ? '男' : (document.querySelector('#gender-female').checked ? '女' : ''), children: document.querySelector('#child-yes').checked ? '有' : (document.querySelector('#child-no').checked ? '无' : ''), grad: window.__gradCommitted, submitAttempts: window.submitAttempts }, pendingFill: Boolean(fillPromise && fillPromise.then) });
+    setTimeout(function () { fillPromise.then(function (results) { document.querySelector('#output').textContent = JSON.stringify({ summary: summary, results: results, state: { evaluation: document.querySelector('#evaluation').value, englishOpen: window.__opened, marital: document.querySelector('#marital').textContent, gender: document.querySelector('#gender-male').checked ? '男' : (document.querySelector('#gender-female').checked ? '女' : ''), children: document.querySelector('#child-yes').checked ? '有' : (document.querySelector('#child-no').checked ? '无' : ''), grad: window.__gradCommitted, submitAttempts: window.submitAttempts } }); }); }, 1000);
   } catch (error) {
     document.querySelector('#output').textContent = JSON.stringify({ error: String(error && error.stack || error), state: { evaluation: document.querySelector('#evaluation').value, englishOpen: window.__opened, submitAttempts: window.submitAttempts } });
   }

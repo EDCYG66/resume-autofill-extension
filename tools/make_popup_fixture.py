@@ -1,18 +1,23 @@
-"""Regenerates 测试/popup-fixture.html from the real popup.html.
+"""Regenerates the popup fixtures from the real popup.html.
 
-The fixture has to mirror popup.html's markup, otherwise the popup smoke test keeps passing
+The fixtures have to mirror popup.html's markup, otherwise the popup smoke test keeps passing
 against a stale page while the shipped one has moved on. Run this after editing popup.html.
+
+Two pages are produced:
+- 测试/popup-fixture.html          drives the scan -> assign -> save -> fill flow.
+- 测试/popup-restore-fixture.html  ships a stored scan for the active tab, so the smoke test can
+  check that reopening the popup brings the review list back instead of starting from nothing.
 
 Run:  python tools/make_popup_fixture.py
 """
 import io
 import json
 import os
-import re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOURCE = os.path.join(ROOT, 'popup.html')
 TARGET = os.path.join(ROOT, '测试', 'popup-fixture.html')
+RESTORE_TARGET = os.path.join(ROOT, '测试', 'popup-restore-fixture.html')
 MANIFEST = os.path.join(ROOT, 'manifest.json')
 
 MOCK = """  <script>
@@ -30,12 +35,13 @@ MOCK = """  <script>
       controlType: 'input', siteKey: 'https://example.com'
     }];
     window.__saved = null;
+    window.__lastScan = null;
     window.__filled = null;
     window.chrome = {
       runtime: { lastError: null, getManifest: function () { return { version: '__VERSION__' }; }, openOptionsPage: function () {} },
       storage: { local: {
-        get: function (defaults, callback) { callback({ resumeProfile: { basic: { name: '示例姓名', id_number: '210000200001010000' }, education: [{ school: '示例大学', major: '电子信息', courses: ['电路原理'] }], additional: { specialty: '长跑', hobbies: '摄影' } }, resumeAccent: '#0078d4' }); },
-        set: function (value, callback) { window.__saved = value; if (callback) callback(); }
+        get: function (defaults, callback) { callback({ resumeProfile: { basic: { name: '示例姓名', id_number: '210000200001010000' }, education: [{ school: '示例大学', major: '电子信息', courses: ['电路原理'] }], additional: { specialty: '长跑', hobbies: '摄影' } }, resumeAccent: '#0078d4', resumeLastScan: __LASTSCAN__ }); },
+        set: function (value, callback) { if (value.resumeLastScan) window.__lastScan = value.resumeLastScan; else window.__saved = value; if (callback) callback(); }
       } },
       tabs: {
         query: function (query, callback) { callback([{ id: 1, url: 'https://example.com/apply' }]); },
@@ -73,6 +79,11 @@ DRIVER = """  <script>
       document.getElementById('scanPage').click();
       setTimeout(function () {
         steps.push(snapshot('after scan'));
+        steps.push({
+          stage: 'stored scan',
+          present: Boolean(window.__lastScan),
+          candidateCount: window.__lastScan && window.__lastScan.candidates ? window.__lastScan.candidates.length : 0
+        });
         // The sensitive row must arrive unticked but still tickable.
         var sensitiveRow = document.querySelectorAll('.candidate')[1];
         var sensitiveBox = sensitiveRow ? sensitiveRow.querySelector('input[type=checkbox]') : null;
@@ -120,20 +131,45 @@ DRIVER = """  <script>
   </script>
 """
 
+# Reopening the popup: no scan is clicked, the stored copy has to bring the list back.
+RESTORE_DRIVER = """  <script>
+    setTimeout(function () {
+      var review = document.getElementById('review');
+      var rows = Array.prototype.slice.call(document.querySelectorAll('.candidate'));
+      document.getElementById('smoke-result').textContent = JSON.stringify({
+        restored: Boolean(review) && !review.hidden,
+        rows: rows.length,
+        badges: rows.map(function (card) { return (card.querySelector('.confidence') || {}).textContent; }),
+        status: document.getElementById('profileStatus').textContent
+      });
+    }, 150);
+  </script>
+"""
 
-def build():
+STORED_SCAN = ("{ url: 'https://example.com/apply', siteKey: 'https://example.com', "
+               "activeFilter: 'all', candidates: CANDIDATES }")
+
+
+def assemble(last_scan_json, driver):
     html = io.open(SOURCE, encoding='utf-8').read()
     version = json.load(io.open(MANIFEST, encoding='utf-8'))['version']
     html = html.replace('<title>简历填充助手</title>',
                         '<title>popup fixture (generated from popup.html)</title>')
     html = html.replace('href="tokens.css"', 'href="../tokens.css"')
     html = html.replace('href="popup.css"', 'href="../popup.css"')
-    mock = MOCK.replace('__VERSION__', version)
+    mock = MOCK.replace('__VERSION__', version).replace('__LASTSCAN__', last_scan_json)
     html = html.replace('  <script src="profile-parser.js"></script>', mock + '  <script src="../profile-parser.js"></script>')
+    html = html.replace('  <script src="shared.js"></script>', '  <script src="../shared.js"></script>')
     html = html.replace('  <script src="popup.js"></script>', '  <script src="../popup.js"></script>')
-    html = html.replace('</body>', '  <pre id="smoke-result"></pre>\n' + DRIVER + '</body>')
-    io.open(TARGET, 'w', encoding='utf-8', newline='').write(html)
+    html = html.replace('</body>', '  <pre id="smoke-result"></pre>\n' + driver + '</body>')
+    return html
+
+
+def build():
+    io.open(TARGET, 'w', encoding='utf-8', newline='').write(assemble('null', DRIVER))
     print('wrote 测试/popup-fixture.html from popup.html')
+    io.open(RESTORE_TARGET, 'w', encoding='utf-8', newline='').write(assemble(STORED_SCAN, RESTORE_DRIVER))
+    print('wrote 测试/popup-restore-fixture.html from popup.html')
 
 
 if __name__ == '__main__':

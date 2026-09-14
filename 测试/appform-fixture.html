@@ -37,28 +37,32 @@
     };
     var candidates = ResumeContent.scan(profile, { siteKey: 'file://appform' });
     var fillPromise = ResumeContent.fill(candidates.filter(function (c) { return c.proposedValue && !c.isNewField; }));
-    document.querySelector('#result').textContent = JSON.stringify({
-      cells: candidates.map(function (c) {
-        return { label: c.label, key: c.profileKey, value: c.proposedValue, conf: c.confidence, isNew: c.isNewField };
-      }),
-      state: {
-        site: document.querySelector('#g-site').value,
-        name: document.querySelector('#g-name').value,
-        birth: document.querySelector('#g-birth').value,
-        phone: document.querySelector('#g-phone').value,
-        qq: document.querySelector('#g-qq').value,
-        height: document.querySelector('#g-height').value,
-        weight: document.querySelector('#g-weight').value,
-        emerg: document.querySelector('#g-emerg').value,
-        school: document.querySelector('#g-school').value,
-        major: document.querySelector('#g-major').value,
-        second: document.querySelector('#g-second').value,
-        hobby: document.querySelector('#g-hobby').value,
-        specialty: document.querySelector('#g-specialty').value,
-        honor: document.querySelector('#g-honor').value,
-        project: document.querySelector('#g-project').value,
-        submitAttempts: window.submitAttempts
-      }
+    // The snapshot has to wait for fill(): the plain text fields resolve on a microtask, so
+    // reading the page synchronously would capture it before anything was written.
+    fillPromise.then(function () {
+      document.querySelector('#result').textContent = JSON.stringify({
+        cells: candidates.map(function (c) {
+          return { label: c.label, key: c.profileKey, value: c.proposedValue, conf: c.confidence, isNew: c.isNewField };
+        }),
+        state: {
+          site: document.querySelector('#g-site').value,
+          name: document.querySelector('#g-name').value,
+          birth: document.querySelector('#g-birth').value,
+          phone: document.querySelector('#g-phone').value,
+          qq: document.querySelector('#g-qq').value,
+          height: document.querySelector('#g-height').value,
+          weight: document.querySelector('#g-weight').value,
+          emerg: document.querySelector('#g-emerg').value,
+          school: document.querySelector('#g-school').value,
+          major: document.querySelector('#g-major').value,
+          second: document.querySelector('#g-second').value,
+          hobby: document.querySelector('#g-hobby').value,
+          specialty: document.querySelector('#g-specialty').value,
+          honor: document.querySelector('#g-honor').value,
+          project: document.querySelector('#g-project').value,
+          submitAttempts: window.submitAttempts
+        }
+      });
     });
   </script>
 </body>

@@ -23,8 +23,15 @@
 }(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
   var CONTENT_VERSION = readExtensionVersion();
-  var CONTROL_SELECTOR = 'input:not([type="hidden"]), textarea, select, [role="combobox"], [aria-haspopup="listbox"]';
+  var CONTROL_SELECTOR = 'input:not([type="hidden"]), textarea, select, [contenteditable=""], [contenteditable="true" i], [contenteditable="plaintext-only" i], [role="combobox"], [aria-haspopup="listbox"], .ant-select, .ant-select-selection, .el-select, .el-select__input, .ivu-select-selection, .select2-selection, .n-select, .n-base-selection, .arco-select, .t-select, .t-select-input, .semi-select, .next-select, .v-select';
   var MAX_FRAMES = 12;
+  // Open shadow roots are walked on every scan, so the traversal is capped: a page with thousands
+  // of custom elements must not turn one click into a full-tree crawl.
+  var MAX_SHADOW_ROOTS = 32;
+  var MAX_EMPTY_SHADOW_ROOTS = 64;
+  // Per root rather than a running total: the cost that matters is one querySelectorAll('*') per
+  // root, and the number of roots is already capped above.
+  var MAX_SCANNED_ELEMENTS = 20000;
 
   function readExtensionVersion() {
     try {
@@ -72,28 +79,36 @@
     employment_type: ['工作性质', '就业性质', '职位类型', '职位性质', '求职类型', '工作类型'],
     available_date: ['可到岗时间', '到岗时间', '到岗日期', '最快到岗', '可入职时间'],
     interview_site: ['面试站点', '面试地点', '面试城市', '面试地址', '应聘站点'],
-    // 教育经历
-    school: ['学校', '学校名称', '毕业院校', '毕业院校名称', '毕业学校', '就读学校', '就读院校', '就读高校', '高校名称', '院校名称', '院校', '母校'],
+    // 教育经历. The composite wordings below (最高学历院校, 最高学历统招 …) are listed in full as
+    // well as in their stripped form: matching removes one leading qualifier at run time, and the
+    // full forms keep this table honest for whatever compares it literally.
+    school: ['学校', '学校名称', '毕业院校', '毕业院校名称', '毕业学校', '就读学校', '就读院校', '就读高校', '高校名称', '院校名称', '院校', '母校', '最高学历院校'],
     college: ['学院', '学院名称', '所在学院', '所在院系', '院系', '系别'],
     start_date: ['开始时间', '开始年月', '开始日期', '起始时间', '起始年月', '起始日期', '入学时间', '入学年月', '入职时间', 'start date'],
-    end_date: ['结束时间', '结束年月', '结束日期', '截止时间', '截止日期', '毕业时间', '毕业年月', '离校时间', '离职时间', 'end date'],
+    end_date: ['结束时间', '结束年月', '结束日期', '截止时间', '截止日期', '毕业时间', '毕业年月', '离校时间', '离职时间', 'end date', '最高学历毕业时间'],
     duration_years: ['学制', '学制年限', '修业年限'],
     level: ['学历', '学历层次', '最高学历', '现有学历', '目前学历', '培养层次'],
-    admission_type: ['招生类型', '培养类型', '招生方式', '录取类型', '录取批次', '统招', '非统招', '统招统分'],
-    study_mode: ['学习形式', '学习方式', '就读形式', '培养方式', '全日制', '非全日制'],
+    admission_type: ['招生类型', '培养类型', '招生方式', '录取类型', '录取批次', '统招', '非统招', '统招统分', '最高学历统招'],
+    study_mode: ['学习形式', '学习方式', '就读形式', '培养方式', '全日制', '非全日制', '最高学历全日制'],
     graduate_type: ['应届往届', '应届/往届', '毕业生类型', '生源类型', '是否应届'],
     degree_certificate: ['学位证', '学位证书', '是否取得学位'],
     degree_name: ['学位名称', '所获学位', '授予学位', '学位'],
     major: ['专业', '专业名称', '所学专业', '就读专业', '主修专业', '本科专业'],
     second_major: ['第二专业', '第二学位专业', '辅修专业', '双学位专业'],
-    major_category: ['专业分类', '专业类别', '专业大类'],
-    major_rank: ['专业排名', '成绩排名', '年级排名', '排名'],
-    gpa: ['绩点', '平均绩点', '成绩绩点', '平均成绩', '均分', '平均分', 'gpa'],
+    major_category: ['专业分类', '专业类别', '专业大类', '最高学历专业分类'],
+    major_rank: ['专业排名', '成绩排名', '年级排名', '班级排名', '排名'],
+    gpa: ['绩点', '平均绩点', '成绩绩点', '平均学分绩点', '学分绩点', '平均成绩', '均分', '平均分', 'gpa'],
     english_level: ['英语等级', '英语级别', '英语水平', '外语等级', '外语水平'],
     english_score: ['英语等级成绩', '英语成绩', '英语分数', '四六级成绩', '外语成绩'],
     research_direction: ['研究方向', '研究领域'],
     advisor: ['导师', '导师姓名', '指导教师', '指导老师'],
     thesis_title: ['毕业论文题目', '毕业论文', '论文题目', '学位论文题目', '毕业设计题目'],
+    student_id: ['学号', '学生学号', '学籍号'],
+    major_rank_percent: ['专业排名百分比', '专业排名（百分比）', '年级排名百分比', '排名百分比'],
+    gpa_max: ['满分平均学分绩点', '平均学分绩点满分', '绩点满分', '满分绩点', 'GPA满分'],
+    weighted_score: ['加权平均分', '加权成绩', '加权分'],
+    score_max: ['满分', '成绩满分', '总分满分'],
+    has_failed_course: ['是否有挂科历史', '挂科历史', '是否有挂科经历', '挂科经历', '是否有挂科', '有无挂科', '挂科'],
     // 工作 / 实习
     employer: ['公司', '公司名称', '企业名称', '单位', '单位名称', '工作单位', '任职单位', '雇主'],
     role: ['职位', '职位名称', '职务', '职务名称', '岗位', '担任职务'],
@@ -101,7 +116,7 @@
     employer_type: ['单位性质', '公司性质', '企业性质', '单位类型', '单位分类'],
     location: ['工作地点', '上班地点', '工作地区'],
     description: ['描述', '说明', '简介'],
-    duties: ['工作内容', '工作职责', '岗位职责', '主要职责'],
+    duties: ['工作内容', '工作职责', '岗位职责', '主要职责', '实习内容'],
     // 自定义 / 其他
     self_evaluation: ['自我评价', '个人评价', '个人陈述', '自我介绍', '个人介绍', '自我描述', '個人簡介', '个人简介', '自我鉴定', '自我认知'],
     political: ['政治面貌'],
@@ -111,21 +126,25 @@
     punishment: ['受处分情况', '处分情况', '是否受过处分', '有无处分'],
     academic_works: ['学术专著', '学术成果', '论文著作', '专著'],
     patents: ['专利成果', '发明专利', '专利情况', '专利'],
-    law_violation: ['是否有触犯国家法律法规', '违法犯罪记录', '是否有违法违纪', '违法违纪', '是否违法犯罪'],
+    law_violation: ['是否有触犯国家法律法规', '是否有触犯国家法律/法规', '违法犯罪记录', '是否有违法违纪', '违法违纪', '是否违法犯罪'],
     applied_subsidiary: ['是否应聘过本公司', '是否投递过本公司', '是否有应聘过', '是否有投递过', '是否应聘过', '是否投递过'],
     relatives_in_company: ['是否有亲属在本公司', '是否有亲友在本公司', '亲戚朋友', '亲属在本公司', '是否有亲友'],
     medical_history: ['手术史', '重大疾病史', '重大疾病', '既往病史', '疾病史'],
-    referral_code: ['校园大使推荐码', '内推推荐码', '推荐码', '内推码']
+    referral_code: ['校园大使推荐码', '内推推荐码', '推荐码', '内推码'],
+    accept_adjustment: ['是否接受岗位调剂', '接受岗位调剂', '是否服从调剂', '服从调剂', '是否接受调剂', '接受调剂', '是否同意调剂'],
+    siblings_count: ['兄弟姐妹数量', '兄弟姐妹数', '兄弟姐妹人数', '同胞数量'],
+    score: ['成绩', '分数', '考试成绩']
   };
   var DISPLAY_LABELS = {
-    name: '姓名', gender: '性别', birth_date: '出生日期', ethnicity: '民族', native_place: '籍贯', political_status: '政治面貌', household_registration: '户口所在地', place_of_origin: '生源地', current_residence: '现居住地', mailing_address: '通信地址', phone: '联系电话', email: '邮箱', target_role: '期望职位', industry: '期望行业', city: '期望城市', salary: '期望薪资', employment_type: '工作性质', available_date: '可到岗时间', school: '学校', college: '学院', start_date: '开始时间', end_date: '结束时间', duration_years: '学制', level: '学历', admission_type: '招生类型', study_mode: '学习形式', degree_certificate: '学位证', degree_name: '学位名称', major: '专业', major_category: '专业分类', major_rank: '专业排名', gpa: '绩点/均分', research_direction: '研究方向', advisor: '导师', employer: '单位', role: '职位', organization: '组织', self_evaluation: '自我评价', courses: '课程', duties: '工作内容', description: '描述', introduction: '项目介绍', outcomes: '项目成果', related_paper: '相关论文', category: '分类', skills: '相关技能', evidence: '应用说明', question: '题目', answer: '回答', custom_fields: '自定义字段', phone_code: '手机区号 / 类别', id_type: '证件类型', id_number: '身份证号', has_children: '有无子女', qq: 'QQ', emergency_contact: '紧急联系人', emergency_phone: '紧急联系电话', interview_site: '面试站点', second_major: '第二专业', graduate_type: '应届往届', english_level: '英语等级', english_score: '英语等级成绩', thesis_title: '毕业论文题目', hobbies: '兴趣爱好', specialty: '特长', punishment: '受处分情况', academic_works: '学术专著', patents: '专利成果', law_violation: '违法违纪情况', applied_subsidiary: '是否应聘过本公司', relatives_in_company: '是否有亲友在本公司', medical_history: '手术史或重大疾病史', referral_code: '推荐码'
+    name: '姓名', gender: '性别', birth_date: '出生日期', ethnicity: '民族', native_place: '籍贯', political_status: '政治面貌', household_registration: '户口所在地', place_of_origin: '生源地', current_residence: '现居住地', mailing_address: '通信地址', phone: '联系电话', email: '邮箱', target_role: '期望职位', industry: '期望行业', city: '期望城市', salary: '期望薪资', employment_type: '工作性质', available_date: '可到岗时间', school: '学校', college: '学院', start_date: '开始时间', end_date: '结束时间', duration_years: '学制', level: '学历', admission_type: '招生类型', study_mode: '学习形式', degree_certificate: '学位证', degree_name: '学位名称', major: '专业', major_category: '专业分类', major_rank: '专业排名', gpa: '绩点/均分', research_direction: '研究方向', advisor: '导师', employer: '单位', role: '职位', organization: '组织', self_evaluation: '自我评价', courses: '课程', duties: '工作内容', description: '描述', introduction: '项目介绍', outcomes: '项目成果', related_paper: '相关论文', category: '分类', skills: '相关技能', evidence: '应用说明', question: '题目', answer: '回答', custom_fields: '自定义字段', phone_code: '手机区号 / 类别', id_type: '证件类型', id_number: '身份证号', has_children: '有无子女', qq: 'QQ', emergency_contact: '紧急联系人', emergency_phone: '紧急联系电话', interview_site: '面试站点', second_major: '第二专业', graduate_type: '应届往届', english_level: '英语等级', english_score: '英语等级成绩', thesis_title: '毕业论文题目', hobbies: '兴趣爱好', specialty: '特长', punishment: '受处分情况', academic_works: '学术专著', patents: '专利成果', law_violation: '违法违纪情况', applied_subsidiary: '是否应聘过本公司', relatives_in_company: '是否有亲友在本公司', medical_history: '手术史或重大疾病史', referral_code: '推荐码', student_id: '学号', major_rank_percent: '专业排名百分比', gpa_max: '满分平均学分绩点', weighted_score: '加权平均分', score_max: '满分', has_failed_course: '是否有挂科经历', accept_adjustment: '是否接受岗位调剂', siblings_count: '兄弟姐妹数量', score: '成绩', relation: '关系'
   };
   // Per-section aliases for leaves whose plain name means something different in each
   // section. A "name" under 荣誉 is an award, not a person. Defining an entry here also
   // scopes that leaf: it stops inheriting the generic aliases of its leaf key.
   var CONTEXT_LABELS = {
-    'skills.name': ['技能名称', '证书名称', '英语证书名称', '技能证书'],
-    'skills.category': ['技能分类', '语言类别'],
+    'skills.name': ['技能名称', '证书名称', '英语证书名称', '技能证书', '语言名称'],
+    'skills.category': ['技能分类', '语言类别', '证书种类', '语言类型'],
+    'skills.score': ['成绩', '证书成绩', '考试成绩'],
     'skills.level': ['熟练程度', '掌握程度'],
     'skills.evidence': ['应用说明', '技能说明'],
     'honors.name': ['荣誉名称', '奖项名称', '获奖名称', '奖励名称', '荣誉奖项'],
@@ -137,8 +156,8 @@
     'projects.organization': ['项目单位', '项目来源', '委托单位'],
     'projects.participant_count': ['参加人数', '项目人数'],
     'projects.research_direction': ['项目方向'],
-    'projects.introduction': ['项目介绍', '项目简介'],
-    'projects.duties': ['项目职责', '项目工作', '承担工作'],
+    'projects.introduction': ['项目介绍', '项目简介', '项目描述'],
+    'projects.duties': ['项目职责', '项目工作', '承担工作', '项目中职责'],
     'projects.outcomes': ['项目成果', '项目成果与收获'],
     'projects.related_paper': ['相关论文', '发表论文'],
     'activities.name': ['活动名称'],
@@ -149,14 +168,19 @@
     'campus_roles.role': ['担任职务', '学生职务', '职务名称'],
     'campus_roles.duties': ['工作内容', '职责描述'],
     'campus_roles.gains': ['任职收获', '工作收获'],
-    'employment.description': ['工作内容', '工作职责', '岗位职责'],
+    'family.relation': ['关系', '称谓', '与本人关系', '亲属关系'],
+    'family.name': ['姓名', '父亲姓名', '母亲姓名', '父母姓名', '亲属姓名'],
+    'family.employer': ['工作单位', '单位名称', '所在单位', '父亲工作单位', '母亲工作单位'],
+    'family.role': ['职务', '职位', '父亲职务', '母亲职务'],
+    'family.phone': ['联系电话', '手机号码', '父亲电话', '母亲电话', '亲属电话'],
+    'employment.description': ['工作内容', '工作职责', '岗位职责', '实习内容', '工作描述'],
     'application_answers.question': ['题目'],
     'application_answers.answer': ['回答']
   };
   var SENSITIVE_RE = /(密码|password|passwd|验证码|captcha|verification.?code|短信码|身份证|证件号码|银行卡|bank.?card|cvv|安全码|security.?code|social.?security)/i;
 
   function normalizeText(value) {
-    return String(value == null ? '' : value).replace(/[：:]/g, '').replace(/[\/]/g, '-').replace(/[\u00a0\t\r\n ]+/g, '').replace(/[（）()【】\[\]，,。；;、]/g, '').toLowerCase();
+    return String(value == null ? '' : value).replace(/[：:]/g, '').replace(/[\/]/g, '-').replace(/[\u00a0\t\r\n ]+/g, '').replace(/[（）()【】\[\]，,。；;、？?！!*·・]/g, '').toLowerCase();
   }
   function textOf(element) { return element && (element.innerText || element.textContent || element.text || '') || ''; }
   function cleanFieldLabel(value) {
@@ -208,19 +232,25 @@
     if (visible && !isGenericPrompt(visible)) return visible;
     return String(control.value || visible || '').trim();
   }
+  // Select components name their root after the library, and each library lays its own popup
+  // out differently. Listing the roots here is what gets a site-specific dropdown scanned;
+  // the class has to be its own token, so "selected-item" never counts as a select.
+  var CUSTOM_SELECT_CLASS_RE = /(^|[\s_-])(el-select|ant-select|ivu-select|select2-selection|n-select|n-base-selection|arco-select|t-select|semi-select|next-select|v-select)([\s_-]|$)/;
   function isCustomSelectControl(element) {
     if (!element) return false;
     var role = normalizeText(element.role || (element.getAttribute && element.getAttribute('role')));
     var popup = normalizeText(element.ariaHaspopup || element['aria-haspopup'] || (element.getAttribute && element.getAttribute('aria-haspopup')));
     var className = String(element.className || '').toLowerCase();
-    return (role === 'combobox' || role === 'listbox') && role !== 'option' || popup === 'listbox' || /(^|[ _-])(el-select|ant-select|ivu-select|select2-selection)([ _-]|$)/.test(className);
+    return (role === 'combobox' || role === 'listbox') && role !== 'option' || popup === 'listbox' || CUSTOM_SELECT_CLASS_RE.test(className);
   }
   function isScannableControl(element) {
     if (!element || element.disabled || element.hidden) return false;
     var type = normalizeText(element.type);
     if (['hidden', 'submit', 'reset', 'button', 'image', 'file'].indexOf(type) >= 0) return false;
     if (element.getAttribute && element.getAttribute('aria-hidden') === 'true') return false;
-    if (!isRendered(element)) return false;
+    // A custom-styled radio or checkbox is a transparent input layered over a drawn circle.
+    // Opacity must not hide it from the scan, or a whole 性别 group never shows up.
+    if (!isRendered(element) && !(isChoiceControl(element) && isRendered(element, { ignoreOpacity: true }))) return false;
     var view = viewOf(element);
     if (view && view.getComputedStyle) {
       var style = view.getComputedStyle(element);
@@ -283,12 +313,29 @@
     }
     return '';
   }
+  // Stable identity for a DOM container, used to tell radio groups apart when the page
+  // renders no name attribute to group them by.
+  var scopeCounter = 0;
+  var scopeIds = typeof WeakMap === 'function' ? new WeakMap() : null;
+  function scopeKey(element) {
+    if (!scopeIds || !element) return '';
+    if (!scopeIds.has(element)) { scopeCounter += 1; scopeIds.set(element, 'scope-' + scopeCounter); }
+    return scopeIds.get(element);
+  }
   function dedupeControlDescriptors(controls) {
     var seen = Object.create(null);
     return (controls || []).filter(function (control) {
       var type = normalizeText(control && control.type);
       if (type !== 'radio' && type !== 'checkbox') return true;
-      var name = String(control.name || control.id || '');
+      var name = String(control.name || '');
+      // A React radio group often renders no name attribute and keeps exclusivity in its own
+      // state; options may still carry their own ids, so the shared question container, not the
+      // id, is what identifies the group. Checkboxes stay id-keyed: a lone 是/否 box is one
+      // field, not a group.
+      if (!name && type === 'radio' && control.closest) {
+        name = scopeKey(control.closest('fieldset, .ant-form-item, .el-form-item, .ivu-form-item, .form-item, .form-cell, .field-card, [class*="form-item"], [class*="field-card"]'));
+      }
+      if (!name) name = String(control.id || '');
       if (!name) return true;
       var key = type + ':' + name;
       if (seen[key]) return false;
@@ -309,32 +356,90 @@
     if (ownerDocument && ownerDocument.defaultView) return ownerDocument.defaultView;
     return typeof window !== 'undefined' ? window : null;
   }
+  // The root an element lives in: a shadow root for a control inside a web component, the inner
+  // document for one inside a frame, the page document otherwise. A <label for> sitting beside a
+  // shadow control is invisible to document.querySelector, so lookups have to start from here.
   function documentOf(element) {
+    if (element && element.getRootNode) {
+      try {
+        var root = element.getRootNode();
+        if (root && root.querySelectorAll) return root;
+      } catch (_) {}
+    }
     var ownerDocument = element && element.ownerDocument;
     if (ownerDocument && ownerDocument.querySelectorAll) return ownerDocument;
     return typeof document !== 'undefined' && document.querySelectorAll ? document : null;
   }
-  function isFrameVisible(frame, ownerDocument) {
-    var view = ownerDocument && ownerDocument.defaultView ? ownerDocument.defaultView : (typeof window !== 'undefined' ? window : null);
+  // A control can live in a shadow root while its dropdown or calendar is portalled to the page
+  // document, so anything hunting a floating panel has to look in both.
+  // A control can live in a shadow root while its dropdown or calendar is portalled to the page
+  // document, so anything hunting a floating panel has to look in all three: the control's own
+  // root, its document (where a panel inside an iframe lives) and the top document.
+  function searchRoots(element) {
+    var roots = [];
+    [documentOf(element), element && element.ownerDocument, typeof document !== 'undefined' ? document : null].forEach(function (root) {
+      if (root && root.querySelectorAll && roots.indexOf(root) < 0) roots.push(root);
+    });
+    return roots;
+  }
+  function isFrameVisible(frame) {
+    var view = viewOf(frame);
     if (!view || !view.getComputedStyle) return true;
     try {
       var style = view.getComputedStyle(frame);
       return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
     } catch (_) { return true; }
   }
+  // A web component keeps its form fields inside an open shadow root, where document.querySelector
+  // cannot see them. The walk below is bounded because it runs on every scan, fill and highlight,
+  // and it stays inside open roots: a closed one is unreachable from page script by design, so a
+  // form built entirely out of them cannot be filled.
+  function shadowHosts(root) {
+    var hosts = [];
+    if (!root || !root.querySelectorAll) return hosts;
+    var elements = null;
+    try { elements = root.querySelectorAll('*'); } catch (_) { return hosts; }
+    var limit = Math.min(elements.length, MAX_SCANNED_ELEMENTS);
+    for (var index = 0; index < limit; index++) {
+      if (elements[index].shadowRoot) hosts.push(elements[index]);
+    }
+    return hosts;
+  }
   function scanRoots() {
     var roots = [];
     if (typeof document === 'undefined' || !document.querySelectorAll) return roots;
     roots.push(document);
-    for (var index = 0; index < roots.length && roots.length < MAX_FRAMES; index++) {
-      var ownerDocument = roots[index];
-      var frames = ownerDocument.querySelectorAll('iframe, frame');
-      for (var frameIndex = 0; frameIndex < frames.length; frameIndex++) {
+    var frameCount = 0;
+    var controlRoots = 0;
+    // A host with no control of its own is still entered, because the form may sit one level
+    // deeper, but it draws on a separate allowance: a page with dozens of icon components would
+    // otherwise spend the whole budget before the form is reached and the scan would come back
+    // empty without saying why.
+    var emptyRoots = 0;
+    for (var index = 0; index < roots.length; index++) {
+      var root = roots[index];
+      var frames = root.querySelectorAll('iframe, frame');
+      for (var frameIndex = 0; frameIndex < frames.length && frameCount < MAX_FRAMES; frameIndex++) {
         var frame = frames[frameIndex];
-        if (!isFrameVisible(frame, ownerDocument)) continue;
+        if (!isFrameVisible(frame)) continue;
         var inner = null;
         try { inner = frame.contentDocument; } catch (_) { inner = null; }
-        if (inner && inner.querySelectorAll && inner.body && roots.indexOf(inner) < 0) roots.push(inner);
+        if (inner && inner.querySelectorAll && inner.body && roots.indexOf(inner) < 0) { roots.push(inner); frameCount += 1; }
+      }
+      var hosts = shadowHosts(root);
+      for (var hostIndex = 0; hostIndex < hosts.length; hostIndex++) {
+        var shadow = hosts[hostIndex].shadowRoot;
+        if (!shadow || !shadow.querySelectorAll || roots.indexOf(shadow) >= 0) continue;
+        var carriesControl = false;
+        try { carriesControl = Boolean(shadow.querySelector(CONTROL_SELECTOR)); } catch (_) {}
+        if (carriesControl) {
+          if (controlRoots >= MAX_SHADOW_ROOTS) continue;
+          controlRoots += 1;
+        } else {
+          if (emptyRoots >= MAX_EMPTY_SHADOW_ROOTS) continue;
+          emptyRoots += 1;
+        }
+        roots.push(shadow);
       }
     }
     return roots;
@@ -343,6 +448,7 @@
     if (!root || !root.querySelectorAll) return [];
     return Array.prototype.slice.call(root.querySelectorAll(CONTROL_SELECTOR));
   }
+  function controlSelector() { return CONTROL_SELECTOR; }
   function allControls() {
     var controls = [];
     scanRoots().forEach(function (root) { controls = controls.concat(queryControls(root)); });
@@ -350,23 +456,31 @@
   }
   // True when the control is actually rendered. An ancestor with display:none hides it, but
   // getComputedStyle on the descendant still reports its own display value, so the plain style
-  // reads are not enough on their own.
-  function isRendered(element) {
+  // reads are not enough on their own. Options.ignoreOpacity is for radios and checkboxes,
+  // whose real control is routinely an opacity:0 input with a drawn shape beside it.
+  function isRendered(element, options) {
     if (!element) return false;
+    var ignoreOpacity = Boolean(options && options.ignoreOpacity);
     if (typeof element.checkVisibility === 'function') {
-      return element.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true, contentVisibilityAuto: true });
+      return element.checkVisibility({ checkOpacity: !ignoreOpacity, checkVisibilityCSS: true, contentVisibilityAuto: true });
     }
     if (element.offsetParent === null) {
       var view = viewOf(element);
-      var position = view && view.getComputedStyle ? view.getComputedStyle(element).position : '';
+      var style = view && view.getComputedStyle ? view.getComputedStyle(element) : null;
       // offsetParent is also null for fixed positioning, where the element is on screen.
-      if (position !== 'fixed') return false;
+      if (!style || style.position !== 'fixed') return false;
+      if (!ignoreOpacity && style.opacity === '0') return false;
     }
     return true;
   }
+  function isChoiceControl(element) {
+    var type = normalizeText(element && element.type);
+    return type === 'radio' || type === 'checkbox';
+  }
   function isVisible(element) {
     if (!element || element.disabled || element.hidden) return false;
-    return isRendered(element);
+    if (isRendered(element)) return true;
+    return isChoiceControl(element) ? isRendered(element, { ignoreOpacity: true }) : false;
   }
   function cssEscape(value) { return String(value).replace(/[^a-zA-Z0-9_-]/g, function (char) { return '\\' + char; }); }
   function ancestorContextLabels(element) {
@@ -393,10 +507,16 @@
       if (isUsableFieldLabel(containerLabel)) return containerLabel;
     }
     var id = element.id;
-    var ownerDocument = documentOf(element);
-    if (id && ownerDocument) {
-      var associated = ownerDocument.querySelector('label[for="' + cssEscape(id) + '"]');
-      if (associated && !isGenericPrompt(textOf(associated))) return cleanFieldLabel(combineContextLabel(textOf(associated).trim(), ancestorContextLabels(element)));
+    if (id) {
+      // The <label for> can sit in the same shadow root, or beside the host in the light DOM when
+      // the control itself is inside one, so both roots are tried before falling back to text.
+      var labelRoots = [documentOf(element), element.ownerDocument];
+      for (var labelIndex = 0; labelIndex < labelRoots.length; labelIndex++) {
+        var labelRoot = labelRoots[labelIndex];
+        if (!labelRoot || !labelRoot.querySelector || labelRoot === labelRoots[0] && labelIndex > 0) continue;
+        var associated = labelRoot.querySelector('label[for="' + cssEscape(id) + '"]');
+        if (associated && !isGenericPrompt(textOf(associated))) return cleanFieldLabel(combineContextLabel(textOf(associated).trim(), ancestorContextLabels(element)));
+      }
     }
     var label = element.closest && element.closest('label');
     if (label && !isGenericPrompt(textOf(label))) return cleanFieldLabel(combineContextLabel(textOf(label).trim(), ancestorContextLabels(element)));
@@ -421,7 +541,7 @@
   // Sites qualify a column with the record it belongs to: 最高学历院校, 本科专业, 硕士导师.
   // Trying the wording without that prefix lets those reach the plain alias, without losing the
   // original: a bare 最高学历 still has to match 学历.
-  var LEADING_QUALIFIER_RE = /^(最高学历|最高学位|第一学历|本科|研究生|硕士|博士)/;
+  var LEADING_QUALIFIER_RE = /^(最高学历|最高学位|第一学历|本科|研究生|硕士|博士|父亲|母亲|爸爸|妈妈|配偶|爱人|监护人|家庭成员|亲属|兄弟姐妹)/;
   function withoutLeadingQualifier(text) {
     var stripped = String(text).replace(LEADING_QUALIFIER_RE, '').trim();
     return stripped === String(text).trim() ? '' : stripped;
@@ -480,8 +600,17 @@
   function makeFingerprint(control, label) { var type = normalizeText(control && (control.type || control.tagName || 'field')) || 'field'; var stable = control && (control.name || control.id || control.getAttribute && control.getAttribute('aria-label') || label || 'field'); return type + ':' + normalizeText(stable); }
   function isSensitiveField(controlLike) { var type = normalizeText(controlLike && controlLike.type); var text = [controlLike && controlLike.label, controlLike && controlLike.name, controlLike && controlLike.id, controlLike && controlLike.placeholder].filter(Boolean).join(' '); return type === 'password' || type === 'file' || SENSITIVE_RE.test(text); }
   function siteMappingMatches(mapping, siteKey, fingerprint, label) { if (!mapping || String(mapping.site_key || '') !== String(siteKey || '')) return false; if (mapping.fingerprint && String(mapping.fingerprint) === String(fingerprint)) return true; if (mapping.selector_hint && String(mapping.selector_hint) === String(fingerprint)) return true; return Boolean(mapping.label && normalizeText(mapping.label) === normalizeText(label)); }
+  // 父亲姓名, 母亲联系电话, 亲属工作单位 …: an attribute of somebody else. Answering those with
+  // the applicant's own name or phone would put wrong data on a form, so they are left unmatched
+  // unless the field really is a relative's.
+  var RELATIVE_ATTRIBUTE_RE = /(父亲|母亲|爸爸|妈妈|配偶|爱人|监护人|亲属|家庭成员|兄弟姐妹)(的)?\s*(联系电话|联系方式|工作单位|手机号码|姓名|名字|电话|手机|单位|职务|职位|关系)/;
+  function isRelativeField(profileKey) {
+    var key = String(profileKey || '');
+    return key.indexOf('family') === 0 || key.indexOf('relatives') >= 0 || key.indexOf('emergency') >= 0 || key.indexOf('siblings') >= 0;
+  }
   function profileLabelStrength(item, label, learned) {
     if (!item || !isUsableFieldLabel(label)) return 'none';
+    if (RELATIVE_ATTRIBUTE_RE.test(String(label)) && !isRelativeField(item.profileKey)) return 'none';
     if (learnedMatch(learned, label, item.profileKey)) return 'exact';
     var profileKey = String(item.profileKey || '');
     var sectionKey = profileKey.replace(/\.\d+\./, '.');
@@ -681,7 +810,7 @@
     return -1;
   }
   function matchChoice(choices, expected) { return matchSelectOption(choices.map(function (choice) { return { value: choice.value, text: textOf(choice) || choice.value }; }), expected); }
-  function isSubmitLike(control) { var type = normalizeText(control && control.type); var text = normalizeText(control && (control.text || control.label || control.value || textOf(control))); return ['submit', 'reset', 'image'].indexOf(type) >= 0 || /(提交|保存|下一步|下一页|确认|投递|上传|submit|save|next|apply|upload)/i.test(text); }
+  function isSubmitLike(control) { var type = normalizeText(control && control.type); var text = normalizeText(control && (control.text || control.label || control.value || (isEditableControl(control) ? '' : textOf(control)))); return ['submit', 'reset', 'image'].indexOf(type) >= 0 || /(提交|保存|下一步|下一页|确认|投递|上传|submit|save|next|apply|upload)/i.test(text); }
   function findProfileValue(label, values, used, learned) {
     var candidates = [];
     (values || []).forEach(function (item) {
@@ -748,7 +877,20 @@
     if (!control || (control.type !== 'radio' && control.type !== 'checkbox')) return [];
     var ownerDocument = documentOf(control);
     if (!ownerDocument) return [];
-    return Array.prototype.slice.call(ownerDocument.querySelectorAll('input[type="' + control.type + '"]')).filter(function (item) { return item.name === control.name && isVisible(item); });
+    var sameType = Array.prototype.slice.call(ownerDocument.querySelectorAll('input[type="' + control.type + '"]')).filter(function (item) { return !item.disabled && isVisible(item); });
+    var byName = control.name ? sameType.filter(function (item) { return item.name === control.name; }) : [];
+    if (byName.length) return byName;
+    // Name-less radios: every option of the same question shares one container, so read the
+    // group from there. Without it only the scanned option is known and picking any other
+    // value (性别 女 when 男 was scanned) fails.
+    if (control.type === 'radio') {
+      var scope = scopedFieldContainer(control) || (control.closest && control.closest('fieldset'));
+      if (scope) {
+        var scoped = sameType.filter(function (item) { return scope.contains(item); });
+        if (scoped.length) return scoped;
+      }
+    }
+    return [control];
   }
   // A radio or checkbox inside a form item is labelled by the group ("可实习时间"), while the
   // option text the user picks is the immediate label ("周一"). Keep both roles apart.
@@ -756,10 +898,42 @@
     var label = control && control.closest && control.closest('label');
     var text = cleanFieldLabel(textOf(label));
     if (isUsableFieldLabel(text)) return text;
+    // Not wrapped in a <label>: the option text usually sits in the item next to the input.
+    var holder = control && control.closest && control.closest('.ant-radio-wrapper, .ant-checkbox-wrapper, .el-radio, .el-checkbox, [class*="radio-item"], [class*="checkbox-item"]');
+    var holderText = cleanFieldLabel(textOf(holder));
+    if (isUsableFieldLabel(holderText)) return holderText;
     return cleanFieldLabel(deriveLabel(control));
   }
+  // Wording that sits next to the control itself, for options that carry no label: the nearest
+  // label element, the text of the immediate parent with the control's own text removed, or the
+  // value attribute. Returns '' when nothing usable is found.
+  function nearbyChoiceText(control) {
+    if (!control) return '';
+    var label = control.closest && control.closest('label');
+    var fromLabel = cleanFieldLabel(textOf(label));
+    if (isUsableFieldLabel(fromLabel)) return fromLabel;
+    var parent = control.parentElement;
+    if (parent) {
+      var own = Array.prototype.slice.call(parent.childNodes || []).filter(function (node) {
+        return node.nodeType === 3 || (node.nodeType === 1 && node !== control && !node.contains(control));
+      }).map(function (node) { return node.textContent; }).join(' ').trim();
+      var cleaned = cleanFieldLabel(own);
+      if (isUsableFieldLabel(cleaned)) return cleaned;
+    }
+    return '';
+  }
   function choiceItems(group) {
-    return (group || []).map(function (item) { return { value: item.value, text: choiceText(item) || item.value }; });
+    var controls = group || [];
+    var items = controls.map(function (item) { return { value: item.value, text: choiceText(item) || item.value }; });
+    // Every option reporting the same wording means they all fell back to the group label, so
+    // none of them can be told apart. Read the option wording instead.
+    var allSame = items.length > 1 && items.every(function (item) { return item.text === items[0].text; });
+    if (allSame) {
+      return controls.map(function (item) {
+        return { value: item.value, text: nearbyChoiceText(item) || item.value };
+      });
+    }
+    return items;
   }
   function choiceTokens(value) {
     return String(value == null ? '' : value).split(/[、,，;；|\/]+/).map(function (token) { return token.trim(); }).filter(Boolean);
@@ -805,7 +979,7 @@
       var mapping = mappings.find(function (item) { return siteMappingMatches(item, siteKey, fingerprint, label); }); var match = mapping ? values.find(function (item) { return item.profileKey === mapping.profile_key; }) : null;
       var matchLabel = [label, control.name || '', control.id || '', control.getAttribute && control.getAttribute('aria-label') || ''].filter(Boolean).join(' '); if (!match) match = findLearnedValue(label, values, used, learned);
       if (!match) match = findProfileValue(matchLabel, values, used, learned);
-      var currentValue = isCustomSelectControl(control) ? customControlValue(control) : control.value || '';
+      var currentValue = isCustomSelectControl(control) ? customControlValue(control) : isEditableControl(control) ? textOf(control).trim() : control.value || '';
       var draft = mapping && findDraft(profile, siteKey, fingerprint, mapping.profile_key); var sourceValue = draft ? draft.value : match ? match.value : currentValue; var isNewField = !match; var confidence = fieldConfidence(match, mapping, label, matchLabel, learned);
       if (match && confidence === 'high' && !isDateComponentLabel(label)) used[match.profileKey] = true;
       var proposed = sourceValue;
@@ -819,7 +993,7 @@
         }
         else if (control.type === 'radio' || control.type === 'checkbox') proposed = previewChoice(control, sourceValue) || sourceValue;
       }
-      return { id: 'resume-field-' + index, controlType: control.tagName ? control.tagName.toLowerCase() : 'custom', label: label || '未标注字段', selectorHint: control.id ? '#' + cssEscape(control.id) : null, profileKey: match ? match.profileKey : null, confidence: confidence, currentValue: currentValue, proposedValue: proposed, isNewField: isNewField || !isUsableFieldLabel(label), fingerprint: fingerprint, siteKey: siteKey, sensitive: sensitive, remember: Boolean(mapping && mapping.confirmed), isDate: isDateField(control, label), name: control.name || '' };
+      return { id: 'resume-field-' + index, controlType: isEditableControl(control) ? 'contenteditable' : control.tagName ? control.tagName.toLowerCase() : 'custom', label: label || '未标注字段', selectorHint: control.id ? '#' + cssEscape(control.id) : null, profileKey: match ? match.profileKey : null, confidence: confidence, currentValue: currentValue, proposedValue: proposed, isNewField: isNewField || !isUsableFieldLabel(label), fingerprint: fingerprint, siteKey: siteKey, sensitive: sensitive, remember: Boolean(mapping && mapping.confirmed), isDate: isDateField(control, label), name: control.name || '' };
     }).filter(shouldIncludeCandidate));
   }
   function isLiveControl(control) { return Boolean(control) && (typeof control.isConnected === 'undefined' || control.isConnected); }
@@ -876,7 +1050,20 @@
     emitChange(control);
     return true;
   }
-  function setTextValue(control, value) { return setNativeValue(control, value); }
+  // React and Vue keep their own model for radios and checkboxes and commit on the click
+  // event, so assigning .checked alone leaves the framework state untouched. A real click also
+  // unchecks the rest of a native radio group. The assignment is the fallback for libraries
+  // that swallow the click with preventDefault.
+  function setChoiceChecked(control, checked) {
+    if (!control) return;
+    if (control.checked === checked) return;
+    if (typeof control.click === 'function') {
+      control.click();
+      if (control.checked === checked) return;
+    }
+    control.checked = checked;
+    emitChange(control);
+  }
   function waitFor(condition, timeoutMs) {
     var started = Date.now();
     return new Promise(function (resolve) {
@@ -887,25 +1074,306 @@
       })();
     });
   }
-  function findCustomOptions(control) {
+  // Option rows across libraries: role=option and data-value are the standard hooks, the
+  // class checks cover the ones that render plain divs. A row is skipped when it merely wraps
+  // another option row, so option groups do not shadow their own children.
+  function optionItems(root) {
+    if (!root || !root.querySelectorAll) return [];
+    return Array.prototype.slice.call(root.querySelectorAll('[role="option"], li, [data-value], [class*="option"], [class*="select-item"], [class*="menu-item"]'))
+      .filter(isVisible)
+      .filter(function (item) {
+        if (item.querySelector && item.querySelector('[role="option"], [class*="option"]')) return false;
+        return normalizeText(textOf(item)) !== '' || (item.getAttribute && item.getAttribute('role') === 'option');
+      });
+  }
+  // Only containers that actually float count as a dropdown. A static wrapper whose class
+  // happens to contain "dropdown" is part of the page, not a menu that just opened.
+  var POPUP_CONTAINER_SELECTOR = '.ant-select-dropdown:not(.ant-select-dropdown-hidden), .el-select-dropdown, .el-select-dropdown__wrap, .ivu-select-dropdown, .n-select-menu, .arco-select-popup, .t-select__dropdown, .semi-select-option-list, [role="listbox"], [class*="select-dropdown"], [class*="select-menu"], [class*="select-options"], [class*="dropdown"], [class*="popper"], [class*="popup"]';
+  function isFloatingPopup(container) {
+    if (!container) return false;
+    if (container.getAttribute && normalizeText(container.getAttribute('role')) === 'listbox') return true;
+    var parent = container.parentElement;
+    if (parent && parent.tagName && parent.tagName.toLowerCase() === 'body') return true;
+    var view = viewOf(container);
+    if (!view || !view.getComputedStyle) return false;
+    try {
+      var style = view.getComputedStyle(container);
+      return style.position === 'absolute' || style.position === 'fixed';
+    } catch (_) { return false; }
+  }
+  function referencedPopupIds(control) {
+    var ids = [];
+    ['aria-controls', 'aria-owns', 'aria-describedby'].forEach(function (attribute) {
+      var value = control && control.getAttribute && control.getAttribute(attribute);
+      if (!value) return;
+      String(value).split(/\s+/).forEach(function (id) { if (id && ids.indexOf(id) < 0) ids.push(id); });
+    });
+    return ids;
+  }
+  function scopedFieldContainer(control) {
+    if (!control || !control.closest) return null;
+    return control.closest('.ant-form-item, .el-form-item, .ivu-form-item, .form-item, .form-cell, .field-card, [class*="form-item"], [class*="field-card"]');
+  }
+  // expectedValue turns a menu scan into a search: several menus can sit in the DOM at once
+  // (a previous field's popup is often still open), so the first non-empty list is not
+  // necessarily this control's. A list that holds the value wins; otherwise the first one seen
+  // is kept purely so a failure can say which options were on offer.
+  function findCustomOptions(control, expectedValue) {
     if (!control || typeof document === 'undefined') return [];
     var ownerDocument = documentOf(control);
     if (!ownerDocument) return [];
+    var expected = expectedValue == null ? '' : normalizeText(expectedValue);
+    var fallback = null;
+    function accept(items) {
+      if (!items || !items.length) return null;
+      if (!expected) return items;
+      if (matchSelectOption(items, expectedValue) >= 0) return items;
+      if (!fallback) fallback = items;
+      return null;
+    }
     var next = control.nextElementSibling;
-    if (next && (normalizeText(next.getAttribute && next.getAttribute('role')) === 'listbox' || /dropdown|menu/i.test(String(next.className || '')))) {
-      var local = Array.prototype.slice.call(next.querySelectorAll('[role="option"], li, [data-value]')).filter(isVisible);
-      if (local.length) return local;
+    if (next && (normalizeText(next.getAttribute && next.getAttribute('role')) === 'listbox' || /dropdown|menu|popup|popper/i.test(String(next.className || '')))) {
+      var local = accept(optionItems(next));
+      if (local) return local;
     }
-    var owner = control.closest && control.closest('.ant-select, .el-select, .ivu-select, [role="combobox"]');
+    var owner = control.closest && control.closest('.ant-select, .el-select, .ivu-select, .n-select, .arco-select, .t-select, .semi-select, [role="combobox"]');
     if (owner) {
-      var owned = Array.prototype.slice.call(owner.querySelectorAll('[role="option"], li, [data-value]')).filter(isVisible);
-      if (owned.length) return owned;
+      var owned = accept(optionItems(owner));
+      if (owned) return owned;
     }
-    var groups = Array.prototype.slice.call(ownerDocument.querySelectorAll('.ant-select-dropdown:not(.ant-select-dropdown-hidden), .el-select-dropdown, .ivu-select-dropdown, [role="listbox"]')).filter(isVisible);
-    var options = [];
-    groups.forEach(function (group) { options = options.concat(Array.prototype.slice.call(group.querySelectorAll('[role="option"], li, [data-value]')).filter(isVisible)); });
-    if (options.length) return options;
-    return Array.prototype.slice.call(ownerDocument.querySelectorAll('[role="option"], [data-value]')).filter(isVisible);
+    var scoped = scopedFieldContainer(control);
+    if (scoped) {
+      var scopedItems = accept(optionItems(scoped));
+      if (scopedItems) return scopedItems;
+    }
+    var roots = searchRoots(control);
+    var ids = referencedPopupIds(control);
+    for (var idIndex = 0; idIndex < ids.length; idIndex++) {
+      for (var idRoot = 0; idRoot < roots.length; idRoot++) {
+        var referenced = roots[idRoot].getElementById ? roots[idRoot].getElementById(ids[idIndex]) : null;
+        if (!referenced || !isVisible(referenced)) continue;
+        var referencedItems = accept(optionItems(referenced));
+        if (referencedItems) return referencedItems;
+      }
+    }
+    for (var rootIndex = 0; rootIndex < roots.length; rootIndex++) {
+      var containers = Array.prototype.slice.call(roots[rootIndex].querySelectorAll(POPUP_CONTAINER_SELECTOR));
+      for (var index = 0; index < containers.length; index++) {
+        var container = containers[index];
+        if (!isVisible(container) || !isFloatingPopup(container)) continue;
+        var items = accept(optionItems(container));
+        if (items) return items;
+      }
+      var loose = accept(Array.prototype.slice.call(roots[rootIndex].querySelectorAll('[role="option"], [data-value]')).filter(isVisible));
+      if (loose) return loose;
+    }
+    return fallback || [];
+  }
+  // A contenteditable box is an ordinary element with no value property, so it needs its own read
+  // and write path everywhere a text control is handled.
+  function isEditableControl(control) {
+    if (!control || !control.getAttribute) return false;
+    var editable = control.getAttribute('contenteditable');
+    if (editable == null) return false;
+    var value = String(editable).toLowerCase();
+    return value === '' || value === 'true' || value === 'plaintext-only';
+  }
+  function isTextEntryControl(control) {
+    if (isEditableControl(control)) return !control.disabled;
+    var tagName = String(control && control.tagName || '').toLowerCase();
+    if (tagName !== 'input' && tagName !== 'textarea') return false;
+    return !control.readOnly && !control.disabled;
+  }
+  function readEditableText(control) {
+    // A contenteditable box has no .value, and innerText folds runs of whitespace, so a value
+    // written back verbatim could read back as a different string. textContent is what was set.
+    if (isEditableControl(control)) return String(control.textContent == null ? '' : control.textContent).replace(/\r\n?/g, '\n');
+    return String(control && control.value || '');
+  }
+  // A framework-managed box (date picker, auto-complete) commits on the native editing events
+  // that only real typing produces, so insertText is tried before the value setter. The setter
+  // stays as the fallback for inputs that refuse the command or hold a non-text type.
+  function setTextValue(control, value) {
+    if (!control) return false;
+    var text = String(value == null ? '' : value);
+    var editable = isEditableControl(control);
+    // The element may live in an iframe or a shadow root: execCommand only exists on a document,
+    // and it has to be the one that owns the control, or the text lands wherever the top
+    // document has focused.
+    var commandDocument = control.ownerDocument && control.ownerDocument.execCommand ? control.ownerDocument
+      : (typeof document !== 'undefined' && document.execCommand ? document : null);
+    if (commandDocument && typeof control.focus === 'function') {
+      try {
+        control.focus();
+        if (!editable && typeof control.select === 'function') control.select();
+        // A contenteditable box has no value to assign, so select-all plus insertText is what
+        // replaces the previous text and notifies the framework.
+        if (editable) commandDocument.execCommand('selectAll', false, null);
+        if (commandDocument.execCommand('insertText', false, text)) { emitChange(control); return true; }
+      } catch (_) {}
+    }
+    if (editable) {
+      control.textContent = text;
+      emitChange(control);
+      return true;
+    }
+    return setNativeValue(control, text);
+  }
+  // Calendar panels keep the date in their own model: typing into the box can leave the page's
+  // validation still saying 请选择日期. Picking the day cell is what the form actually records.
+  // The panel opens on the month of the value already in the box, so no month navigation is
+  // attempted; a panel showing some other month is left alone rather than clicked blindly.
+  var DATE_PANEL_SELECTOR = '.el-picker-panel, .el-date-picker, .ant-picker-dropdown, .n-date-panel, .ivu-picker-panel, [class*="picker-panel"], [class*="date-panel"], [class*="picker-dropdown"]';
+  var MONTH_ABBREVIATIONS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  function pickerHeaderElement(panel) {
+    if (!panel || !panel.querySelector) return null;
+    return panel.querySelector('.el-date-picker__header, .ant-picker-header-view, .n-date-panel-header, .ivu-picker-panel-content-header, [class*="picker-header"], [class*="panel-header"], [class*="date-header"]');
+  }
+  function pickerHeaderMatches(panel, parts) {
+    var header = pickerHeaderElement(panel);
+    // No readable header means no way to know which month the cells belong to; refusing is the
+    // only safe answer, because clicking a same-numbered day in the wrong month sets a wrong date.
+    if (!header) return false;
+    var text = normalizeText(textOf(header));
+    if (!text || text.indexOf(parts.year) < 0) return false;
+    var month = String(Number(parts.month));
+    if (new RegExp('(^|[^0-9])' + month + '([^0-9]|$)').test(text)) return true;
+    return text.indexOf(MONTH_ABBREVIATIONS[Number(parts.month) - 1]) >= 0;
+  }
+  function findDatePanel(control) {
+    if (typeof document === 'undefined') return null;
+    var panels = [];
+    searchRoots(control).forEach(function (root) {
+      panels = panels.concat(Array.prototype.slice.call(root.querySelectorAll(DATE_PANEL_SELECTOR)));
+    });
+    panels = panels.filter(isVisible);
+    for (var index = 0; index < panels.length; index++) {
+      if (panels[index].querySelector && panels[index].querySelector('td, [role="gridcell"], [class*="cell"]')) return panels[index];
+    }
+    return null;
+  }
+  function dayCellFor(panel, day) {
+    if (!panel || !panel.querySelectorAll) return null;
+    var wanted = String(Number(day));
+    var cells = Array.prototype.slice.call(panel.querySelectorAll('td, [role="gridcell"], [class*="cell"]')).filter(isVisible);
+    for (var index = 0; index < cells.length; index++) {
+      var cell = cells[index];
+      var text = textOf(cell).trim();
+      if (text !== wanted && String(Number(text)) !== wanted) continue;
+      var className = String(cell.className || '');
+      if (/prev|next|disabled|outside|other|hidden/i.test(className)) continue;
+      var tagName = String(cell.tagName || '').toLowerCase();
+      var isDayLike = tagName === 'td' || /cell|day|date/i.test(className) || (cell.getAttribute && cell.getAttribute('role') === 'gridcell');
+      if (!isDayLike) continue;
+      return cell;
+    }
+    return null;
+  }
+  async function commitThroughDatePanel(control, expected) {
+    var parts = parseDateParts(expected);
+    if (!parts || !parts.day) return false;
+    dispatchOpenSequence(control);
+    var panel = await waitFor(function () { return findDatePanel(control); }, 600);
+    if (!panel || !pickerHeaderMatches(panel, parts)) return false;
+    var cell = dayCellFor(panel, parts.day);
+    if (!cell) return false;
+    dispatchOpenSequence(cell);
+    var committed = await waitFor(function () {
+      var digits = readControlValue(control).replace(/\D/g, '');
+      return digits.indexOf(parts.year + parts.month + parts.day) >= 0 ? true : null;
+    }, 800);
+    return Boolean(committed);
+  }
+  // Reports success only when the value actually stuck. A readonly or framework-managed
+  // control silently discards the write, and claiming a fill that never landed is worse than
+  // admitting the failure, so the caller can fall back to picking from the dropdown.
+  async function setTextValueVerified(control, value) {
+    if (!isTextEntryControl(control)) return false;
+    setTextValue(control, value);
+    var expected = String(value == null ? '' : value).trim();
+    var settled = await waitFor(function () {
+      return readEditableText(control).trim() === expected ? true : null;
+    }, 250);
+    return Boolean(settled);
+  }
+  // The click handler is not always on the element itself: some libraries listen on an inner
+  // selection row, others on the wrapper. Trying the control, its owner, its inner input and
+  // its parent in turn covers all four layouts.
+  function openTargets(control) {
+    var targets = [control];
+    var owner = control.closest && control.closest('.ant-select, .el-select, .ivu-select, .n-select, .arco-select, .t-select, .semi-select, [role="combobox"], [aria-haspopup]');
+    if (owner && owner !== control) targets.push(owner);
+    var inner = control.querySelector && control.querySelector('input, [class*="selection"], [class*="selector"], [class*="select-view"], [class*="select-input"]');
+    if (inner && targets.indexOf(inner) < 0) targets.push(inner);
+    if (control.parentElement && targets.indexOf(control.parentElement) < 0) targets.push(control.parentElement);
+    return targets;
+  }
+  // Some dropdowns open on pointerdown and never see a plain click().
+  function dispatchOpenSequence(element) {
+    if (!element) return;
+    var view = viewOf(element);
+    var MouseCtor = view && view.MouseEvent ? view.MouseEvent : (typeof MouseEvent !== 'undefined' ? MouseEvent : null);
+    var PointerCtor = view && view.PointerEvent ? view.PointerEvent : (typeof PointerEvent !== 'undefined' ? PointerEvent : null);
+    try {
+      if (PointerCtor) element.dispatchEvent(new PointerCtor('pointerdown', { bubbles: true, cancelable: true }));
+      if (MouseCtor) {
+        element.dispatchEvent(new MouseCtor('mousedown', { bubbles: true, cancelable: true }));
+        element.dispatchEvent(new MouseCtor('mouseup', { bubbles: true, cancelable: true }));
+      }
+      element.click();
+    } catch (_) {
+      try { element.click(); } catch (e) {}
+    }
+  }
+  function dismissCustomSelect(control) {
+    try {
+      var view = viewOf(control);
+      var KeyCtor = view && view.KeyboardEvent ? view.KeyboardEvent : (typeof KeyboardEvent !== 'undefined' ? KeyboardEvent : null);
+      if (KeyCtor) control.dispatchEvent(new KeyCtor('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+    } catch (_) {}
+  }
+  async function openCustomOptions(control, expectedValue) {
+    var targets = openTargets(control);
+    for (var index = 0; index < targets.length; index++) {
+      dispatchOpenSequence(targets[index]);
+      var options = await waitFor(function () {
+        var found = findCustomOptions(control, expectedValue);
+        return found.length ? found : null;
+      }, index === 0 ? 900 : 500);
+      if (options) return options;
+    }
+    return null;
+  }
+  function optionLooksSelected(option) {
+    if (!option || !option.getAttribute) return false;
+    if (option.getAttribute('aria-selected') === 'true') return true;
+    return /(^|[\s_-])(selected|active|checked|is-selected)([\s_-]|$)/i.test(String(option.className || ''));
+  }
+  async function fillCustomSelect(control, field) {
+    var expected = expectedFieldValue(field.proposedValue, field.label);
+    if (!expected) return { id: field.id, status: 'failed', reason: '模板缺少该日期的具体日值' };
+    var options = await openCustomOptions(control, expected);
+    if (!options) return { id: field.id, status: 'failed', reason: '下拉选项没有出现，可能需要手动选择' };
+    // Give an async menu a moment to render before settling for a list that lacks the value.
+    var matchedContainer = await waitFor(function () {
+      var found = findCustomOptions(control, expected);
+      return found.length && matchSelectOption(found, expected) >= 0 ? found : null;
+    }, 400);
+    if (matchedContainer) options = matchedContainer;
+    var optionIndex = isDateComponentLabel(field.label) ? matchDateSelectOption(options, expected) : matchSelectOption(options, expected);
+    if (optionIndex < 0) return { id: field.id, status: 'failed', reason: '下拉选项里没有“' + expected + '”' };
+    var option = options[optionIndex];
+    var optionText = textOf(option);
+    try { option.scrollIntoView({ block: 'nearest' }); } catch (_) {}
+    dispatchOpenSequence(option);
+    var applied = await waitFor(function () {
+      var shown = readControlValue(control);
+      var normalizedOption = normalizeText(optionText);
+      if (shown && normalizedOption && normalizeText(shown).indexOf(normalizedOption) >= 0) return true;
+      return optionLooksSelected(option) ? true : null;
+    }, 1000);
+    if (applied) { dismissCustomSelect(control); return { id: field.id, status: 'filled' }; }
+    return { id: field.id, status: 'failed', reason: '选了“' + optionText + '”，页面没有确认这次选择' };
   }
   async function fill(fields) {
     if (typeof document === 'undefined') return [];
@@ -923,44 +1391,45 @@
         control.selectedIndex = selectIndex; emitChange(control); results.push({ id: field.id, status: 'filled' }); continue;
       }
       if (control.type === 'radio' || control.type === 'checkbox') {
-        var group = control.name ? choiceGroupItems(control) : [control];
+        var group = choiceGroupItems(control);
         if (!group.length) group = [control];
         if (control.type === 'checkbox' && group.length === 1) {
           var flag = booleanChoice(field.proposedValue);
-          if (flag !== null) { group[0].checked = flag; emitChange(group[0]); results.push({ id: field.id, status: 'filled' }); continue; }
+          if (flag !== null) { setChoiceChecked(group[0], flag); results.push({ id: field.id, status: 'filled' }); continue; }
         }
         var choiceIndexes = matchChoiceIndexes(choiceItems(group), field.proposedValue);
         if (!choiceIndexes.length) { results.push({ id: field.id, status: 'failed', reason: '选项没有精确匹配项' }); continue; }
         if (control.type === 'checkbox') {
           group.forEach(function (item, itemIndex) {
-            var next = choiceIndexes.indexOf(itemIndex) >= 0;
-            if (item.checked !== next) { item.checked = next; emitChange(item); }
+            setChoiceChecked(item, choiceIndexes.indexOf(itemIndex) >= 0);
           });
         } else {
-          group[choiceIndexes[0]].checked = true;
-          emitChange(group[choiceIndexes[0]]);
+          setChoiceChecked(group[choiceIndexes[0]], true);
         }
         results.push({ id: field.id, status: 'filled' });
         continue;
       }
       if (isCustomSelectControl(control)) {
-        control.click();
-        var optionContainer = await waitFor(function () { var options = findCustomOptions(control); return options.length ? options : null; }, 1000);
-        if (!optionContainer) { results.push({ id: field.id, status: 'failed', reason: '自定义下拉没有出现选项' }); continue; }
-        var customExpectedValue = expectedFieldValue(field.proposedValue, field.label);
-        if (!customExpectedValue) { results.push({ id: field.id, status: 'failed', reason: '模板缺少该日期的具体日值' }); continue; }
-        var customIndex = isDateComponentLabel(field.label) ? matchDateSelectOption(optionContainer, customExpectedValue) : matchSelectOption(optionContainer, customExpectedValue);
-        if (customIndex < 0) { results.push({ id: field.id, status: 'failed', reason: '自定义下拉选项没有匹配项' }); continue; }
-        optionContainer[customIndex].click();
-        var updated = await waitFor(function () {
-          var shown = customControlValue(control);
-          return shown && !isGenericPrompt(shown) ? shown : null;
-        }, 1000);
-        if (updated && (normalizeText(updated) === normalizeText(textOf(optionContainer[customIndex])) || normalizeText(updated).indexOf(normalizeText(textOf(optionContainer[customIndex]))) >= 0)) results.push({ id: field.id, status: 'filled' });
-        else results.push({ id: field.id, status: 'failed', reason: '下拉选项点击后页面状态没有更新' });
+        results.push(await fillCustomSelect(control, field));
         continue;
       }
-      setTextValue(control, field.proposedValue); results.push({ id: field.id, status: 'filled' });
+      // Plain text is the common case, but a site-specific dropdown is often a readonly or
+      // decorative element that silently ignores the write. Verify the value stuck before
+      // claiming success, and pick from its popup when it did not.
+      if (await setTextValueVerified(control, field.proposedValue)) {
+        // A date picker may hold the typed value on screen while its own model stays empty;
+        // confirming through the calendar is what clears the page's 请选择日期 error.
+        if (isDateField(control, field.label)) await commitThroughDatePanel(control, expectedFieldValue(field.proposedValue, field.label));
+        results.push({ id: field.id, status: 'filled' });
+        continue;
+      }
+      var fallback = await fillCustomSelect(control, field);
+      if (fallback.status !== 'filled' && isTextEntryControl(control)) {
+        // A writable text box that refused the value is a format or length problem, not a
+        // missing dropdown, and saying so saves the applicant a pointless hunt.
+        fallback = { id: field.id, status: 'failed', reason: '输入框没有接受这个值，请检查格式或长度' };
+      }
+      results.push(fallback);
     }
     return results;
   }
@@ -1020,20 +1489,27 @@
   }
   var currentHighlightEl = null;
   var highlightTimer = null;
-  function ensureHighlightStyle() {
-    if (typeof document === 'undefined') return;
+  // A document stylesheet does not cross a shadow boundary, so a control inside a web component
+  // needs its own copy of the rule or the highlight is invisible on it. Frames need the same
+  // treatment for the same reason: the sheet has to live in the tree that paints the element.
+  function ensureHighlightStyle(root) {
+    var target = root && root.querySelector ? root : (typeof document !== 'undefined' ? document : null);
+    if (!target) return;
     var id = '__resume_autofill_style';
-    if (!document.getElementById(id)) {
-      var style = document.createElement('style');
-      style.id = id;
-      style.textContent = '@keyframes __resume_pulse { 0% { box-shadow: 0 0 0 0 rgba(0, 120, 212, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(0, 120, 212, 0); } 100% { box-shadow: 0 0 0 0 rgba(0, 120, 212, 0); } } .__resume_autofill_highlight { outline: 3px solid #0078d4 !important; outline-offset: 3px !important; animation: __resume_pulse 1.6s infinite !important; border-radius: 4px !important; transition: outline 0.2s ease !important; }';
-      (document.head || document.documentElement).appendChild(style);
-    }
+    var existing = target.getElementById ? target.getElementById(id) : target.querySelector('#' + id);
+    if (existing) return;
+    var owner = target.nodeType === 9 ? target : (target.ownerDocument || (typeof document !== 'undefined' ? document : null));
+    if (!owner || !owner.createElement) return;
+    var style = owner.createElement('style');
+    style.id = id;
+    style.textContent = '@keyframes __resume_pulse { 0% { box-shadow: 0 0 0 0 rgba(0, 120, 212, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(0, 120, 212, 0); } 100% { box-shadow: 0 0 0 0 rgba(0, 120, 212, 0); } } .__resume_autofill_highlight { outline: 3px solid #0078d4 !important; outline-offset: 3px !important; animation: __resume_pulse 1.6s infinite !important; border-radius: 4px !important; transition: outline 0.2s ease !important; }';
+    (target.head || target).appendChild(style);
   }
   function clearHighlight() {
     if (highlightTimer) { clearTimeout(highlightTimer); highlightTimer = null; }
     if (typeof document !== 'undefined') {
-      var highlighted = document.querySelectorAll('.__resume_autofill_highlight');
+      var highlighted = [];
+      scanRoots().forEach(function (root) { highlighted = highlighted.concat(Array.prototype.slice.call(root.querySelectorAll('.__resume_autofill_highlight'))); });
       for (var i = 0; i < highlighted.length; i++) {
         highlighted[i].classList.remove('__resume_autofill_highlight');
       }
@@ -1046,7 +1522,12 @@
     clearHighlight();
     var control = resolveField(field, controlIndex());
     if (!control) return false;
-    ensureHighlightStyle();
+    ensureHighlightStyle(typeof document !== 'undefined' ? document : null);
+    if (control.ownerDocument && control.ownerDocument !== document) ensureHighlightStyle(control.ownerDocument);
+    if (control.getRootNode) {
+      var styleRoot = control.getRootNode();
+      if (styleRoot && styleRoot.nodeType === 11) ensureHighlightStyle(styleRoot);
+    }
     var target = control;
     if (control.offsetWidth === 0 && control.offsetHeight === 0 && control.closest) {
       target = control.closest('.el-select') || control.closest('.ant-select') || control.parentElement || control;
@@ -1063,5 +1544,5 @@
     }, 3000);
     return true;
   }
-  return { normalizeText: normalizeText, isRendered: isRendered, labelVariants: labelVariants, withoutLeadingQualifier: withoutLeadingQualifier, isPlaceholderValue: isPlaceholderValue, buildLearnedMap: buildLearnedMap, findLearnedValue: findLearnedValue, leafProfileKey: leafProfileKey, learnedMatch: learnedMatch, fieldConfidence: fieldConfidence, labelMatchStrength: labelMatchStrength, profileLabelStrength: profileLabelStrength, matchChoiceIndexes: matchChoiceIndexes, choiceTokens: choiceTokens, booleanChoice: booleanChoice, choiceItems: choiceItems, choiceText: choiceText, scanRoots: scanRoots, allControls: allControls, controlIndex: controlIndex, isLiveControl: isLiveControl, deriveLabel: deriveLabel, flattenProfile: flattenProfile, matchSelectOption: matchSelectOption, matchDateSelectOption: matchDateSelectOption, matchChoice: matchChoice, isSubmitLike: isSubmitLike, isSensitiveField: isSensitiveField, isGenericPrompt: isGenericPrompt, cleanFieldLabel: cleanFieldLabel, isUsableFieldLabel: isUsableFieldLabel, shouldIncludeCandidate: shouldIncludeCandidate, customControlValue: customControlValue, readControlValue: readControlValue, isScannableControl: isScannableControl, isCustomSelectControl: isCustomSelectControl, findCustomOptions: findCustomOptions, combineContextLabel: combineContextLabel, findContainerLabel: findContainerLabel, preferredContainerSelectors: preferredContainerSelectors, isNavigationOnlyLabel: isNavigationOnlyLabel, isDateComponentLabel: isDateComponentLabel, dateComponentValue: dateComponentValue, dedupeControlDescriptors: dedupeControlDescriptors, dedupeFieldDescriptors: dedupeFieldDescriptors, valueMatchesLabel: valueMatchesLabel, setNativeValue: setNativeValue, makeFingerprint: makeFingerprint, siteMappingMatches: siteMappingMatches, collectDraftValues: collectDraftValues, upsertDrafts: upsertDrafts, scan: scan, fill: fill, rememberFields: rememberFields, highlight: highlight, clearHighlight: clearHighlight };
+  return { normalizeText: normalizeText, controlSelector: controlSelector, isRendered: isRendered, nearbyChoiceText: nearbyChoiceText, labelVariants: labelVariants, withoutLeadingQualifier: withoutLeadingQualifier, isPlaceholderValue: isPlaceholderValue, buildLearnedMap: buildLearnedMap, findLearnedValue: findLearnedValue, leafProfileKey: leafProfileKey, learnedMatch: learnedMatch, fieldConfidence: fieldConfidence, labelMatchStrength: labelMatchStrength, profileLabelStrength: profileLabelStrength, matchChoiceIndexes: matchChoiceIndexes, choiceTokens: choiceTokens, booleanChoice: booleanChoice, choiceItems: choiceItems, choiceText: choiceText, scanRoots: scanRoots, searchRoots: searchRoots, allControls: allControls, controlIndex: controlIndex, isLiveControl: isLiveControl, deriveLabel: deriveLabel, flattenProfile: flattenProfile, matchSelectOption: matchSelectOption, matchDateSelectOption: matchDateSelectOption, matchChoice: matchChoice, isSubmitLike: isSubmitLike, isSensitiveField: isSensitiveField, isGenericPrompt: isGenericPrompt, cleanFieldLabel: cleanFieldLabel, isUsableFieldLabel: isUsableFieldLabel, shouldIncludeCandidate: shouldIncludeCandidate, customControlValue: customControlValue, readControlValue: readControlValue, isScannableControl: isScannableControl, isCustomSelectControl: isCustomSelectControl, isEditableControl: isEditableControl, isTextEntryControl: isTextEntryControl, readEditableText: readEditableText, findCustomOptions: findCustomOptions, combineContextLabel: combineContextLabel, findContainerLabel: findContainerLabel, preferredContainerSelectors: preferredContainerSelectors, isNavigationOnlyLabel: isNavigationOnlyLabel, isDateComponentLabel: isDateComponentLabel, dateComponentValue: dateComponentValue, dedupeControlDescriptors: dedupeControlDescriptors, dedupeFieldDescriptors: dedupeFieldDescriptors, valueMatchesLabel: valueMatchesLabel, setNativeValue: setNativeValue, makeFingerprint: makeFingerprint, siteMappingMatches: siteMappingMatches, collectDraftValues: collectDraftValues, upsertDrafts: upsertDrafts, scan: scan, fill: fill, rememberFields: rememberFields, highlight: highlight, clearHighlight: clearHighlight };
 }));

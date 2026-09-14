@@ -137,6 +137,9 @@
   <script src="../content.js"></script>
   <script>
     window.submitAttempts = 0;
+    window.addEventListener('error', function (event) {
+      document.querySelector('#result').textContent = JSON.stringify({ error: String(event.message), stack: String(event.error && event.error.stack || '') });
+    });
     document.querySelector('#sites-fixture').addEventListener('submit', function (event) {
       event.preventDefault();
       window.submitAttempts += 1;
@@ -205,6 +208,9 @@
       document.querySelector('#result').textContent = JSON.stringify({
         cells: cells, state: { values: values, submitAttempts: window.submitAttempts }
       });
+    }, function (error) {
+      // Surface the failure: an empty <pre> gives the smoke test nothing to report.
+      document.querySelector('#result').textContent = JSON.stringify({ error: String(error && error.stack || error) });
     });
   </script>
 </body>

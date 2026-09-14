@@ -107,6 +107,26 @@ test('deduplicates radio and checkbox controls by group fingerprint', () => {
   assert.deepEqual(Content.dedupeControlDescriptors(controls), [controls[0], controls[2]]);
 });
 
+test('deduplicates a name-less radio group by its question container', () => {
+  const scopeA = {};
+  const scopeB = {};
+  const male = { type: 'radio', name: '', id: 'gender-male', closest: () => scopeA };
+  const female = { type: 'radio', name: '', id: 'gender-female', closest: () => scopeA };
+  const single = { type: 'radio', name: '', id: 'marital-single', closest: () => scopeB };
+  assert.deepEqual(Content.dedupeControlDescriptors([male, female, single]), [male, single]);
+});
+
+test('keeps transparent custom radios scannable but not transparent text helpers', () => {
+  // A styled radio is an opacity:0 input layered under a drawn circle, so checkVisibility only
+  // reports it when opacity is not part of the question.
+  const radio = { type: 'radio', checkVisibility: (options) => !options.checkOpacity };
+  assert.equal(Content.isRendered(radio), false);
+  assert.equal(Content.isRendered(radio, { ignoreOpacity: true }), true);
+  const helperText = { type: 'text', checkVisibility: (options) => !options.checkOpacity };
+  assert.equal(Content.isRendered(helperText), false);
+  assert.equal(Content.isRendered(helperText, { ignoreOpacity: true }), true);
+});
+
 test('creates React-compatible input events through the native setter', () => {
   assert.equal(typeof Content.setNativeValue, 'function');
 });
@@ -419,7 +439,17 @@ test('offers the additional section fields to the assignment picker', () => {
   const additional = catalog.filter((g) => g.section === 'additional');
   assert.equal(additional.length, 1, 'additional should appear once in the picker');
   assert.equal(additional[0].scalar, true);
-  assert.equal(additional[0].fields.length, 10);
+  assert.equal(additional[0].fields.length, 12);
+  const keys = additional[0].fields.map((field) => field[0]);
+  assert.ok(keys.includes('accept_adjustment'), '是否接受岗位调剂 should be assignable');
+  assert.ok(keys.includes('siblings_count'), '兄弟姐妹数量 should be assignable');
+});
+
+test('offers the family section fields to the assignment picker', () => {
+  const catalog = require('../profile-parser.js').ASSIGNABLE_FIELDS;
+  const family = catalog.filter((g) => g.section === 'family');
+  assert.equal(family.length, 1);
+  assert.deepEqual(family[0].fields.map((field) => field[0]), ['relation', 'name', 'employer', 'role', 'phone']);
 });
 
 test('keeps a section leaf from inheriting the generic aliases of its key', () => {
@@ -685,6 +715,37 @@ test('every name shown in the UI is a name the matcher accepts', () => {
   assert.deepEqual(failures, [], 'these labels are printed in the UI but match nothing');
 });
 
+test('matches marital status synonyms used by recruitment dropdowns', () => {
+  const options = [{ text: '请选择婚姻状况' }, { text: '未婚' }, { text: '已婚' }, { text: '离异' }];
+  assert.equal(Content.matchSelectOption(options, '单身'), 1);
+  assert.equal(Content.matchSelectOption(options, '已婚未育'), 2);
+});
+
+test('includes class-only Ant Design selects in the control scan', () => {
+  assert.match(Content.controlSelector(), /\.ant-select/);
+});
+
+test('recognizes select roots from every common component library', () => {
+  [
+    'el-select', 'el-select__wrapper', 'ant-select', 'ant-select-selector',
+    'n-select', 'n-base-selection', 'n-base-selection-input',
+    'arco-select', 'arco-select-view', 't-select', 't-select-input',
+    'semi-select', 'next-select', 'v-select', 'select2-selection'
+  ].forEach((className) => {
+    assert.equal(Content.isCustomSelectControl({ className, tagName: 'DIV' }), true, className);
+  });
+  // A class that merely contains the letters must not be mistaken for a dropdown.
+  assert.equal(Content.isCustomSelectControl({ className: 'selected-item', tagName: 'DIV' }), false);
+  assert.equal(Content.isCustomSelectControl({ className: 'unselected-row', tagName: 'DIV' }), false);
+});
+
+test('scans the added select roots as controls', () => {
+  const selector = Content.controlSelector();
+  ['.n-select', '.n-base-selection', '.arco-select', '.t-select', '.semi-select'].forEach((entry) => {
+    assert.ok(selector.includes(entry), entry + ' should be scanned');
+  });
+});
+
 test('the quick copy list is built from the catalog, not a second label table', () => {
   const source = require('fs').readFileSync(require('path').join(__dirname, '..', 'popup.js'), 'utf8');
   assert.ok(source.includes('ResumeProfile.ASSIGNABLE_FIELDS.forEach'), 'the quick copy list should read the shared catalog');
@@ -692,3 +753,101 @@ test('the quick copy list is built from the catalog, not a second label table', 
   assert.ok(!/basicLabels\s*=/.test(source), 'popup.js should not carry its own basic label table');
   assert.ok(!/intentionLabels\s*=/.test(source), 'popup.js should not carry its own intention label table');
 });
+
+test('keeps a relative column away from the applicant own details', () => {
+  // 父亲姓名 must never be answered with the applicant's name, and 父亲联系电话 with their
+  // phone. Wrong data on a form is worse than an empty column.
+  const wrong = [
+    ['basic.name', '父亲姓名'], ['basic.name', '母亲姓名'],
+    ['basic.phone', '父亲联系电话'], ['basic.phone', '母亲联系电话'],
+    ['employment.1.employer', '父亲工作单位'], ['employment.1.role', '父亲职务']
+  ];
+  wrong.forEach(([key, label]) => {
+    assert.equal(Content.profileLabelStrength({ profileKey: key, label: key.split('.').pop(), value: 'x' }, label), 'none',
+      label + ' must not reach ' + key);
+  });
+  // The family fields themselves still match, including with the kinship prefix attached.
+  const right = [
+    ['family.1.name', '父亲姓名'], ['family.1.name', '母亲姓名'],
+    ['family.1.phone', '父亲联系电话'], ['family.1.employer', '父亲工作单位'],
+    ['family.1.role', '父亲职务']
+  ];
+  right.forEach(([key, label]) => {
+    assert.equal(Content.profileLabelStrength({ profileKey: key, label: key.split('.').pop(), value: 'x' }, label), 'exact',
+      label + ' should reach ' + key);
+  });
+  // A question that merely mentions relatives is not a relative's column.
+  assert.notEqual(Content.profileLabelStrength({ profileKey: 'additional.relatives_in_company', label: '是否亲友', value: 'x' }, '是否有亲戚朋友在格力工作？'), 'none');
+});
+
+test('matches slash and question-mark wordings', () => {
+  // 是否有触犯国家法律/法规？ : the slash became a hyphen and the ？ stayed, so neither lined up.
+  assert.equal(Content.profileLabelStrength({ profileKey: 'additional.law_violation', label: '违法违纪', value: 'x' }, '是否有触犯国家法律/法规？'), 'exact');
+  assert.equal(Content.normalizeText('是否有触犯国家法律/法规？'), '是否有触犯国家法律-法规');
+  assert.equal(Content.normalizeText('* 性别:'), '性别');
+});
+
+test('reads option wording from beside the control when it has no label', () => {
+  // Options in a custom group often carry no label of their own, so every option came back with
+  // the group label and none could be told apart.
+  const groupLabel = '性别:';
+  assert.equal(Content.choiceText({ closest: function () { return null; }, parentElement: null }), '');
+  const fake = {
+    closest: function () { return null; },
+    parentElement: { childNodes: [{ nodeType: 3, textContent: '男', contains: function () { return false; } }] }
+  };
+  assert.equal(Content.nearbyChoiceText(fake), '男');
+  assert.equal(Content.nearbyChoiceText(null), '');
+  assert.equal(typeof groupLabel, 'string');
+});
+
+ test('treats a contenteditable box as an editable text control', () => {
+   const editable = (value) => ({ tagName: 'DIV', getAttribute: (name) => (name === 'contenteditable' ? value : null) });
+   assert.equal(Content.isEditableControl(editable('')), true);
+   assert.equal(Content.isEditableControl(editable('true')), true);
+   assert.equal(Content.isEditableControl(editable('TRUE')), true, 'the attribute value is case-insensitive');
+   assert.equal(Content.isEditableControl(editable('plaintext-only')), true);
+   assert.equal(Content.isEditableControl(editable('false')), false);
+   assert.equal(Content.isEditableControl(editable('inherit')), false);
+   assert.equal(Content.isEditableControl({ tagName: 'INPUT' }), false);
+   assert.equal(Content.isEditableControl(null), false);
+   assert.equal(Content.isTextEntryControl(editable('true')), true);
+   assert.equal(Content.isTextEntryControl(editable('false')), false);
+   assert.equal(Content.isTextEntryControl({ tagName: 'INPUT', readOnly: true }), false);
+   assert.equal(Content.isTextEntryControl({ tagName: 'TEXTAREA' }), true);
+ });
+
+ test('scans contenteditable boxes whatever the casing of the attribute', () => {
+   const selector = Content.controlSelector();
+   assert.match(selector, /\[contenteditable=""\]/);
+   // Without the i flag the selector misses contenteditable="TRUE", which browsers treat as
+   // editable, so such a box would be scanned by nobody.
+   assert.match(selector, /\[contenteditable="true" i\]/);
+   assert.match(selector, /\[contenteditable="plaintext-only" i\]/);
+ });
+
+ test('reads a contenteditable value from its text, not from a value property', () => {
+   assert.equal(Content.readEditableText({ tagName: 'DIV', getAttribute: () => 'true', textContent: '自我评价' }), '自我评价');
+   assert.equal(Content.readEditableText({ tagName: 'INPUT', value: '13800138000' }), '13800138000');
+   assert.equal(Content.readEditableText({ tagName: 'DIV', getAttribute: () => 'true', textContent: 'a\r\nb' }), 'a\nb');
+   assert.equal(Content.readEditableText(null), '');
+ });
+
+ test('does not let rich text body text mark a field as a submit control', () => {
+   // isSubmitLike falls back to the element's own text, which for a contenteditable box is the
+   // whole document inside it: a draft that mentions 上传, or an English one containing "applied",
+   // used to make the field vanish from the scan with no explanation.
+   const editor = (text) => ({ tagName: 'DIV', getAttribute: (name) => (name === 'contenteditable' ? 'true' : null), textContent: text });
+   assert.equal(Content.isSubmitLike(editor('上传了我的项目经历')), false);
+   assert.equal(Content.isSubmitLike(editor('applied machine learning')), false);
+   assert.equal(Content.isSubmitLike({ tagName: 'BUTTON', text: '提交' }), true);
+   assert.equal(Content.isSubmitLike({ tagName: 'DIV', text: '下一步' }), true);
+ });
+
+ test('searches a control\'s own root and its document for a portalled panel', () => {
+   const shadowRoot = { nodeType: 11, querySelectorAll: () => [] };
+   const ownerDocument = { nodeType: 9, querySelectorAll: () => [] };
+   const control = { getRootNode: () => shadowRoot, ownerDocument: ownerDocument };
+   assert.deepEqual(Content.searchRoots(control), [shadowRoot, ownerDocument]);
+   assert.deepEqual(Content.searchRoots({}), []);
+ });

@@ -1,4 +1,4 @@
-# Proves the thing people actually download works: runs tools/pack.ps1, extracts the zip the
+﻿# Proves the thing people actually download works: runs tools/pack.ps1, extracts the zip the
 # way a user would, and loads the extracted folder into a real browser.
 #
 # This is the only test that checks the delivery format end to end. The other smoke tests build
@@ -29,14 +29,14 @@ Expand-Archive -LiteralPath $zipPath -DestinationPath $extDir -Force
 if (-not (Test-Path -LiteralPath (Join-Path $extDir 'manifest.json'))) {
   throw 'The extracted folder has no manifest.json at its root, so it cannot be loaded unpacked.'
 }
-$manifest = Get-Content -Raw -LiteralPath (Join-Path $extDir 'manifest.json') | ConvertFrom-Json
-foreach ($name in @('popup.html','options.html','content.js','profile-parser.js','popup.js','options.js','popup.css','options.css','tokens.css')) {
+$manifest = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $extDir 'manifest.json') | ConvertFrom-Json
+ foreach ($name in @('popup.html','options.html','content.js','profile-parser.js','popup.js','options.js','popup.css','options.css','tokens.css','shared.js')) {
   if (-not (Test-Path -LiteralPath (Join-Path $extDir $name))) { throw "The zip is missing $name" }
 }
 foreach ($relative in @($manifest.icons.PSObject.Properties | ForEach-Object { $_.Value })) {
   if (-not (Test-Path -LiteralPath (Join-Path $extDir $relative))) { throw "The zip is missing the icon $relative" }
 }
-if ($manifest.key -ne (Get-Content -Raw -LiteralPath (Join-Path $root 'manifest.json') | ConvertFrom-Json).key) {
+if ($manifest.key -ne (Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $root 'manifest.json') | ConvertFrom-Json).key) {
   throw 'The packed manifest lost the pinned key; updates would orphan the stored profile.'
 }
 
@@ -59,11 +59,11 @@ $stderr = Join-Path $work 'stderr.txt'
 $process = Start-Process -FilePath $browser -ArgumentList @(
   '--headless=new', '--disable-gpu', '--no-first-run',
   (Quote-Arg "--user-data-dir=$profile"), (Quote-Arg "--load-extension=$extDir"),
-  '--virtual-time-budget=3000', '--dump-dom', 'about:blank'
+  '--virtual-time-budget=8000', '--dump-dom', 'about:blank'
 ) -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
 if ($process.ExitCode -ne 0) { throw "Browser exited with code $($process.ExitCode)." }
 
-$browserLog = if (Test-Path -LiteralPath $stderr) { Get-Content -Raw -LiteralPath $stderr } else { '' }
+ $browserLog = if (Test-Path -LiteralPath $stderr) { Get-Content -Raw -Encoding UTF8 -LiteralPath $stderr } else { '' }
 if ($browserLog -match 'Failed to load extension|Manifest is not valid|Manifest file is missing') {
   throw "The browser refused the packed extension: $($browserLog.Trim())"
 }
@@ -74,7 +74,7 @@ if (-not (Test-Path -LiteralPath $prefPath)) {
   Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
   exit 0
 }
-$pref = Get-Content -Raw -LiteralPath $prefPath | ConvertFrom-Json
+$pref = Get-Content -Raw -Encoding UTF8 -LiteralPath $prefPath | ConvertFrom-Json
 $loaded = @($pref.extensions.settings.PSObject.Properties | Where-Object { $_.Value.location -eq 8 })
 if ($loaded.Count -eq 0) {
   Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue

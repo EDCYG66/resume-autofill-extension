@@ -14,7 +14,7 @@ $zipPath = Join-Path $root '简历填充助手.zip'
 
 $files = @(
   'manifest.json','popup.html','popup.js','popup.css','options.html','options.js','options.css',
-  'tokens.css','content.js','profile-parser.js','README.md','LICENSE'
+  'tokens.css','shared.js','content.js','profile-parser.js','README.md','LICENSE'
 )
 $directories = @('icons')
 
@@ -30,10 +30,24 @@ New-Item -ItemType Directory -Force -Path $stage | Out-Null
 foreach ($name in $files) { Copy-Item -LiteralPath (Join-Path $root $name) -Destination $stage }
 foreach ($name in $directories) { Copy-Item -LiteralPath (Join-Path $root $name) -Destination $stage -Recurse }
 
-if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
-Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zipPath -CompressionLevel Optimal
-
-Add-Type -AssemblyName System.IO.Compression.FileSystem
+ if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
+ # Entries are written one by one with '/' separators rather than through Compress-Archive:
+ # Windows PowerShell 5.1 stores the icon as 'icons\icon-16.png' with a backslash, which is not
+ # the directory the checks below (and the zip specification) are looking for.
+ Add-Type -AssemblyName System.IO.Compression.FileSystem
+ $writer = [System.IO.Compression.ZipFile]::Open($zipPath, 'Create')
+ try {
+   foreach ($name in $files) {
+     [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($writer, (Join-Path $stage $name), $name, [System.IO.Compression.CompressionLevel]::Optimal)
+   }
+   foreach ($directory in $directories) {
+     $base = Join-Path $stage $directory
+     Get-ChildItem -LiteralPath $base -Recurse -File | ForEach-Object {
+       $entry = $directory + '/' + $_.FullName.Substring($base.Length + 1).Replace('\', '/')
+       [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($writer, $_.FullName, $entry, [System.IO.Compression.CompressionLevel]::Optimal)
+     }
+   }
+ } finally { $writer.Dispose() }
 $archive = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
 try {
   $entries = @($archive.Entries | ForEach-Object { $_.FullName })
@@ -48,7 +62,7 @@ try {
   # that only make sense inside the repository.
   $personalFile = Join-Path $root 'personal-values.local.txt'
   if (Test-Path -LiteralPath $personalFile) {
-    $personalValues = @(Get-Content -LiteralPath $personalFile | ForEach-Object { $_.Trim() } | Where-Object { $_ -and $_[0] -ne '#' })
+    $personalValues = @(Get-Content -Encoding UTF8 -LiteralPath $personalFile | ForEach-Object { $_.Trim() } | Where-Object { $_ -and $_[0] -ne '#' })
     foreach ($entry in $archive.Entries) {
       if ($entry.Length -eq 0) { continue }
       $reader = New-Object System.IO.StreamReader($entry.Open(), [System.Text.Encoding]::UTF8)

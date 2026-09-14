@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="zh-CN">
+<body>
+<!--
+  Fixture for shadow DOM and contenteditable coverage.
+
+  A shadow tree cannot be written in markup, so the first script below builds the hosts and the
+  second one drives the engine. Hosts:
+    #open-host   -> open shadow root: 姓名 (input), 学历 (native select), 性别 (radio group)
+    #nested-host -> open shadow root holding <inner-resume-host>, whose own shadow root carries
+                    学校 (input) and 期望职位 (contenteditable)
+  Plus a top-level <div contenteditable> labelled 自我评价, and a submit button whose click and
+  submit are counted so submitAttempts has to stay 0.
+
+  Every asserted value is read back out of the live DOM, never echoed from the profile, so a value
+  the engine did not write comes back "" and fails the smoke test instead of passing silently.
+-->
+<form id="resume-fixture">
+  <div id="open-host"></div>
+  <div id="nested-host"></div>
+  <div class="field-card">
+    <label for="self-evaluation-editable">自我评价</label>
+    <div id="self-evaluation-editable" contenteditable="true" role="textbox" aria-label="自我评价" aria-multiline="true"></div>
+  </div>
+  <button id="resume-submit" type="submit">提交</button>
+</form>
+<pre id="smoke-result"></pre>
+<script src="../content.js"></script>
+<script>
+  (function () {
+    // The label sits in a wrapper next to its control, the way the React/Ant sites in this repo
+    // render, so the label resolves from the container without a shadow-aware label[for] lookup.
+    var openRoot = document.getElementById('open-host').attachShadow({ mode: 'open' });
+    openRoot.innerHTML = [
+      '<div class="ant-form-item">',
+      '<div class="ant-form-item-label"><label for="shadow-name">姓名</label></div>',
+      '<div class="ant-form-item-control"><input id="shadow-name" name="shadowName"></div>',
+      '</div>',
+      '<div class="ant-form-item">',
+      '<div class="ant-form-item-label"><label for="shadow-degree">学历</label></div>',
+      '<div class="ant-form-item-control"><select id="shadow-degree" name="shadowDegree">',
+      '<option>请选择</option><option>本科</option><option>硕士</option>',
+      '</select></div>',
+      '</div>',
+      '<fieldset><legend>性别</legend>',
+      '<label><input id="shadow-gender-male" type="radio" name="shadowGender" value="男">男</label>',
+      '<label><input id="shadow-gender-female" type="radio" name="shadowGender" value="女">女</label>',
+      '</fieldset>'
+    ].join('');
+
+    var outerRoot = document.getElementById('nested-host').attachShadow({ mode: 'open' });
+    var innerHost = document.createElement('inner-resume-host');
+    outerRoot.appendChild(innerHost);
+    innerHost.attachShadow({ mode: 'open' }).innerHTML = [
+      '<label for="nested-school">学校</label><input id="nested-school" name="nestedSchool">',
+      '<div class="ant-form-item">',
+      '<div class="ant-form-item-label"><label for="nested-role">期望职位</label></div>',
+      '<div class="ant-form-item-control"><div id="nested-role" contenteditable="true" role="textbox" aria-label="期望职位"></div></div>',
+      '</div>'
+    ].join('');
+  })();
+</script>
+<script>
+  window.submitAttempts = 0;
+  document.querySelector('#resume-fixture').addEventListener('submit', function (event) {
+    event.preventDefault();
+    window.submitAttempts += 1;
+  });
+  document.querySelector('#resume-submit').addEventListener('click', function () {
+    window.submitAttempts += 1;
+  });
+  window.addEventListener('load', function () {
+    var output = document.querySelector('#smoke-result');
+    function report(payload) { output.textContent = JSON.stringify(payload); }
+    function readValue(control) { return control && typeof control.value === 'string' ? control.value : ''; }
+    function readText(control) { return control ? String(control.textContent || '').trim() : ''; }
+    function readChecked(root, name) {
+      if (!root) return '';
+      var radios = root.querySelectorAll('input[type="radio"][name="' + name + '"]');
+      for (var index = 0; index < radios.length; index++) {
+        if (radios[index].checked) return radios[index].value;
+      }
+      return '';
+    }
+    // Controls inside a shadow root are only reachable through the host's own root: a document
+    // querySelector never crosses the boundary.
+    function shadowRootOf(id) {
+      var host = document.getElementById(id);
+      return host && host.shadowRoot ? host.shadowRoot : null;
+    }
+    function nestedShadowRoot() {
+      var outer = shadowRootOf('nested-host');
+      var inner = outer ? outer.querySelector('inner-resume-host') : null;
+      return inner && inner.shadowRoot ? inner.shadowRoot : null;
+    }
+    try {
+      var profile = {
+        basic: { name: '测试姓名', gender: '男', phone: '13800138000' },
+        intention: { target_role: '测试工程师' },
+        education: [{ school: '测试大学', level: '硕士' }],
+        self_evaluation: '测试自我评价文本'
+      };
+      var allCandidates = ResumeContent.scan(profile, { siteKey: 'file://shadow-fixture' });
+      var candidates = allCandidates.filter(function (candidate) {
+        return candidate.proposedValue && !candidate.isNewField;
+      });
+      Promise.resolve(ResumeContent.fill(candidates)).then(function (results) {
+        var openRoot = shadowRootOf('open-host');
+        var nestedRoot = nestedShadowRoot();
+        report({
+          shadowNameFilled: readValue(openRoot && openRoot.querySelector('#shadow-name')),
+          shadowSelectFilled: readValue(openRoot && openRoot.querySelector('#shadow-degree')),
+          shadowGenderFilled: readChecked(openRoot, 'shadowGender'),
+          nestedShadowSchoolFilled: readValue(nestedRoot && nestedRoot.querySelector('#nested-school')),
+          editableFilled: readText(document.getElementById('self-evaluation-editable')),
+          editableInShadowFilled: readText(nestedRoot && nestedRoot.querySelector('#nested-role')),
+          scannedCount: allCandidates.length,
+          submitAttempts: window.submitAttempts,
+          fillStatuses: (results || []).map(function (item) { return item && item.status; })
+        });
+      }, function (error) {
+        report({ error: String(error && error.stack || error) });
+      });
+    } catch (error) {
+      report({ error: String(error && error.stack || error) });
+    }
+  });
+</script>
+</body>
+</html>

@@ -15,11 +15,11 @@ New-Item -ItemType Directory -Force -Path $profile | Out-Null
 $fixture = [Uri]::new((Join-Path $PSScriptRoot 'popup-fixture.html')).AbsoluteUri
 $process = Start-Process -FilePath $browser -ArgumentList @(
   '--headless=new', '--disable-gpu', '--no-first-run',
-  (Quote-Arg "--user-data-dir=$profile"), '--virtual-time-budget=5000', '--dump-dom', $fixture
+  (Quote-Arg "--user-data-dir=$profile"), '--virtual-time-budget=12000', '--dump-dom', $fixture
 ) -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
 if ($process.ExitCode -ne 0) { throw "Browser exited with code $($process.ExitCode)." }
 
-$dom = Get-Content -Raw -LiteralPath $stdout
+$dom = Get-Content -Raw -Encoding UTF8 -LiteralPath $stdout
 $match = [regex]::Match($dom, '<pre id="smoke-result">(.*?)</pre>', 'Singleline')
 if (-not $match.Success) { throw 'The popup fixture produced no result.' }
 $steps = [System.Net.WebUtility]::HtmlDecode($match.Groups[1].Value) | ConvertFrom-Json
@@ -29,6 +29,8 @@ $byStage = @{}
 foreach ($step in $steps) { $byStage[$step.stage] = $step }
 
 if (-not $byStage.ContainsKey('after scan')) { throw 'The scan step did not run.' }
+if (-not $byStage.ContainsKey('stored scan') -or $byStage['stored scan'].present -ne $true) { throw 'The scan result was not persisted for popup restoration.' }
+if ($byStage['stored scan'].candidateCount -ne 2) { throw "The persisted scan should contain two candidates, got $($byStage['stored scan'].candidateCount)." }
 if ($byStage['after scan'].rows[0].badge -ne '资料里没有') { throw 'An unrecognised field should start as 资料里没有.' }
 if ($byStage['after scan'].saveDisabled -ne $true) { throw 'Save should be disabled before any choice is made.' }
 
@@ -72,4 +74,25 @@ if (-not $stored -or $stored.mappings.Count -ne 1) { throw 'The assignment was n
 if ($stored.mappings[0].label -ne '学习经历') { throw "Wrong learned label: $($stored.mappings[0].label)" }
 if ($stored.mappings[0].profile_key -ne 'education.1.school') { throw "Wrong learned key: $($stored.mappings[0].profile_key)" }
 
-Write-Output ("Popup smoke test passed: scan, assign, save and fill consistent; " + "sensitive column stays unticked until asked; 资料速查 lists " + $quick.count + " entries.")
+# Reopening the popup used to drop the scan: Chrome closes the panel as soon as the applicant
+# clicks the page. The restore fixture ships a stored scan for the active tab, so the review
+# list has to come back without pressing 看看这页要填什么.
+$restoreFixture = [Uri]::new((Join-Path $PSScriptRoot 'popup-restore-fixture.html')).AbsoluteUri
+$restoreProfile = Join-Path $tempRoot 'popup-restore-profile'
+$restoreStdout = Join-Path $tempRoot 'popup-restore-stdout.txt'
+$restoreStderr = Join-Path $tempRoot 'popup-restore-stderr.txt'
+New-Item -ItemType Directory -Force -Path $restoreProfile | Out-Null
+$restoreProcess = Start-Process -FilePath $browser -ArgumentList @(
+  '--headless=new', '--disable-gpu', '--no-first-run',
+  (Quote-Arg "--user-data-dir=$restoreProfile"), '--virtual-time-budget=12000', '--dump-dom', $restoreFixture
+) -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput $restoreStdout -RedirectStandardError $restoreStderr
+if ($restoreProcess.ExitCode -ne 0) { throw "Restore fixture browser exited with code $($restoreProcess.ExitCode)." }
+$restoreDom = Get-Content -Raw -Encoding UTF8 -LiteralPath $restoreStdout
+$restoreMatch = [regex]::Match($restoreDom, '<pre id="smoke-result">(.*?)</pre>', 'Singleline')
+if (-not $restoreMatch.Success) { throw 'The restore fixture produced no result.' }
+$restore = [System.Net.WebUtility]::HtmlDecode($restoreMatch.Groups[1].Value) | ConvertFrom-Json
+if ($restore.restored -ne $true) { throw 'Reopening the popup did not restore the previous scan.' }
+if ($restore.rows -ne 2) { throw "Expected 2 restored rows, got $($restore.rows)." }
+if ($restore.status -notmatch '恢复') { throw "The status line should mention the restored scan, got '$($restore.status)'." }
+
+Write-Output ("Popup smoke test passed: scan, assign, save and fill consistent; " + "sensitive column stays unticked until asked; reopening restores the scan; " + "资料速查 lists " + $quick.count + " entries.")

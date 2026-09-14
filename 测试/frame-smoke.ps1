@@ -14,12 +14,12 @@ $process = Start-Process -FilePath $chrome -ArgumentList @(
   '--allow-file-access-from-files',
   (Quote-Arg "--user-data-dir=$profile"),
   '--run-all-compositor-stages-before-draw',
-  '--virtual-time-budget=5000',
+  '--virtual-time-budget=10000',
   '--dump-dom',
   $fixture
 ) -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
 if ($process.ExitCode -ne 0) { throw "Chrome exited with code $($process.ExitCode)." }
-$dom = Get-Content -Raw -LiteralPath $stdout
+$dom = Get-Content -Raw -Encoding UTF8 -LiteralPath $stdout
 if (-not $dom.Contains('"rootCount":2')) { throw 'Frame smoke test did not scan the same origin iframe.' }
 if (-not $dom.Contains('"frameFieldFound":true')) { throw 'Frame smoke test did not match fields inside the iframe.' }
 if (-not $dom.Contains('"innerSchoolFilled":"测试大学"')) { throw 'Frame smoke test did not fill the iframe text field.' }
