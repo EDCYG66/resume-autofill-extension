@@ -22,7 +22,9 @@ $required = @(
   '测试/load-smoke.ps1','测试/popup-fixture.html','测试/popup-smoke.ps1','测试/appform-fixture.html',
   '测试/appform-smoke.ps1','测试/dynamic-fixture.html','测试/dynamic-smoke.ps1','测试/pack-smoke.ps1',
   '测试/shared.test.js','测试/shadow-fixture.html','测试/shadow-smoke.ps1',
-  '测试/phoenix-fixture.html','测试/phoenix-smoke.ps1'
+  '测试/phoenix-fixture.html','测试/phoenix-smoke.ps1',
+  'tools/make_preview_images.ps1',
+  'docs/popup-review.png','docs/popup-quick-copy.png','docs/options-editor.png'
 )
 foreach ($name in $required) {
   $path = Join-Path $root $name
