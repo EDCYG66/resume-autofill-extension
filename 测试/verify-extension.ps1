@@ -34,7 +34,19 @@ foreach ($name in $required) {
 
 $manifest = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $root 'manifest.json') | ConvertFrom-Json
 if ($manifest.manifest_version -ne 3) { throw 'Manifest is not MV3' }
- if ($manifest.version -ne '0.3.3') { throw "Expected release version 0.3.3, found $($manifest.version)" }
+# The manifest is the one place a version is written. The changelog entry and the README line are
+# prose restating it, so they are compared against it instead of being trusted: a release that
+# bumps one and forgets the other ships a version number a reader cannot reconcile.
+$version = [string]$manifest.version
+if ($version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { throw "Manifest version is not a release version: '$version'" }
+$changelog = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $root 'CHANGELOG.md')
+$newestEntry = [regex]::Match($changelog, '(?m)^##\s+([0-9]+\.[0-9]+\.[0-9]+)')
+if (-not $newestEntry.Success) { throw 'CHANGELOG.md has no "## <version>" heading.' }
+if ($newestEntry.Groups[1].Value -ne $version) { throw "CHANGELOG.md's newest entry is $($newestEntry.Groups[1].Value) but the manifest says $version" }
+$readme = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $root 'README.md')
+$readmeVersion = [regex]::Match($readme, '当前版本\s*`([0-9]+\.[0-9]+\.[0-9]+)`')
+if (-not $readmeVersion.Success) { throw 'README.md no longer states the current version as 当前版本 `x.y.z`.' }
+if ($readmeVersion.Groups[1].Value -ne $version) { throw "README.md says 当前版本 $($readmeVersion.Groups[1].Value) but the manifest says $version" }
 $actualPermissions = @($manifest.permissions | Sort-Object)
 $expectedPermissions = @('activeTab','scripting','storage')
 if (($actualPermissions -join ',') -ne (($expectedPermissions | Sort-Object) -join ',')) { throw "Unexpected permissions: $($actualPermissions -join ',')" }

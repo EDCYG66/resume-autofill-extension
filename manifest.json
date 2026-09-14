@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "本地简历填充助手",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "只在用户点击后扫描并填充简历表单的本地 Chrome 扩展。",
   "permissions": [
     "activeTab",
