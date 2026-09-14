@@ -46,10 +46,33 @@
       return saved;
     });
   }
+  // 证件号码这类列在扫描时和别的列一样从资料里匹配出来，如果连值一起写进扫描缓存，同一串敏感
+  // 数字就会在 storage 里出现两处。缓存里只留「哪个字段」，值等恢复显示时再从资料读回来。
+  // 申请人自己在那一行敲进去的值不在此列：那是他的输入，重开弹窗丢掉才是 bug。网页当前显示的值
+  // 一并丢掉——那是同一个数据的网站副本，而且它本来就还在页面上，恢复后重新扫描即可。
+  function stripSensitiveValues(candidates) {
+    return candidates.map(function (candidate) {
+      if (!candidate.sensitive) return candidate;
+      var fromProfile = candidate.profileKey ? ResumeProfile.readAssignedValue(state.profile, candidate.profileKey) : '';
+      var copy = Object.assign({}, candidate);
+      copy.currentValue = '';
+      var value = String(candidate.proposedValue == null ? '' : candidate.proposedValue);
+      if (!fromProfile || value === String(fromProfile)) copy.proposedValue = '';
+      return copy;
+    });
+  }
+  function rehydrateSensitiveValues(candidates) {
+    candidates.forEach(function (candidate) {
+      if (candidate.sensitive && candidate.profileKey && !candidate.proposedValue) {
+        candidate.proposedValue = ResumeProfile.readAssignedValue(state.profile, candidate.profileKey);
+      }
+    });
+    return candidates;
+  }
   function persistLastScan() {
     if (!state.lastScanTab || !state.candidates.length || !chrome.storage || !chrome.storage.local) return;
     var candidates;
-    try { candidates = JSON.parse(JSON.stringify(state.candidates)); } catch (_) { return; }
+    try { candidates = JSON.parse(JSON.stringify(stripSensitiveValues(state.candidates))); } catch (_) { return; }
     chrome.storage.local.set({
       resumeLastScan: {
         url: state.lastScanTab.url,
@@ -79,7 +102,7 @@
         state.lastScanTab = { id: tab.id, url: tab.url };
         state.siteKey = saved.siteKey || '';
         state.activeFilter = saved.activeFilter || 'all';
-        state.candidates = saved.candidates;
+        state.candidates = rehydrateSensitiveValues(saved.candidates);
         $('review').hidden = false;
         renderCandidates();
         resolve(true);

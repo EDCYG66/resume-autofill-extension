@@ -85,6 +85,61 @@ test('updates a site draft without crossing origins', () => {
   ]);
 });
 
+test('treats a stored draft with a different value as not stored', () => {
+  const draft = { site_key: 'https://one.example', fingerprint: 'text:job-code', profile_key: 'custom_fields.1', value: 'new' };
+  assert.equal(Content.draftIsStored([{ site_key: 'https://one.example', fingerprint: 'text:job-code', profile_key: 'custom_fields.1', value: 'old' }], draft), false);
+  assert.equal(Content.draftIsStored([{ site_key: 'https://one.example', fingerprint: 'text:job-code', profile_key: 'custom_fields.1', value: 'new' }], draft), true);
+  assert.equal(Content.draftIsStored([], draft), false);
+});
+
+test('writes a site draft in one pass when nothing else touches the profile', async () => {
+  const stored = { resumeProfile: { basic: { name: '示例姓名' }, site_drafts: [] } };
+  let writes = 0;
+  const io = {
+    read: async () => JSON.parse(JSON.stringify(stored)),
+    write: async (profile) => { writes += 1; stored.resumeProfile = JSON.parse(JSON.stringify(profile)); }
+  };
+  const draft = { site_key: 'https://one.example', fingerprint: 'text:job-code', profile_key: 'custom_fields.1', value: 'R-001' };
+  assert.equal(await Content.writeDraft(draft, io, 3), true);
+  assert.equal(writes, 1);
+  assert.equal(stored.resumeProfile.site_drafts.length, 1);
+});
+
+// The popup and the editor read the profile, then write it back. When one of them reads before
+// this draft was written and saves after it, its snapshot carries no draft and the draft is gone
+// from storage again. The read-back has to notice and re-apply it without dropping the other
+// page's change.
+test('re-applies a draft when another page overwrites the profile with a pre-draft snapshot', async () => {
+  const stored = { resumeProfile: { basic: { name: '示例姓名' }, site_drafts: [] } };
+  let writes = 0;
+  const io = {
+    read: async () => JSON.parse(JSON.stringify(stored)),
+    write: async (profile) => {
+      writes += 1;
+      stored.resumeProfile = JSON.parse(JSON.stringify(profile));
+      if (writes === 1) {
+        stored.resumeProfile = { basic: { name: '示例姓名' }, additional: { hobbies: '摄影' }, site_drafts: [] };
+      }
+    }
+  };
+  const draft = { site_key: 'https://one.example', fingerprint: 'text:job-code', profile_key: 'custom_fields.1', value: 'R-001' };
+  assert.equal(await Content.writeDraft(draft, io, 3), true);
+  assert.equal(writes, 2);
+  assert.equal(stored.resumeProfile.additional.hobbies, '摄影');
+  assert.equal(Content.draftIsStored(stored.resumeProfile.site_drafts, draft), true);
+});
+
+test('gives up after the retry budget when the draft never sticks', async () => {
+  let writes = 0;
+  const io = {
+    read: async () => ({ resumeProfile: { site_drafts: [] } }),
+    write: async () => { writes += 1; }
+  };
+  const draft = { site_key: 'https://one.example', fingerprint: 'text:job-code', profile_key: 'custom_fields.1', value: 'R-001' };
+  assert.equal(await Content.writeDraft(draft, io, 3), false);
+  assert.equal(writes, 3);
+});
+
 test('ignores hidden helper controls and generic placeholders', () => {
   assert.equal(Content.isScannableControl({ type: 'hidden', disabled: false, hidden: false }), false);
   assert.equal(Content.isGenericPrompt('请填写评价内容'), true);

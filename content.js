@@ -241,7 +241,7 @@
     var role = normalizeText(element.role || (element.getAttribute && element.getAttribute('role')));
     var popup = normalizeText(element.ariaHaspopup || element['aria-haspopup'] || (element.getAttribute && element.getAttribute('aria-haspopup')));
     var className = String(element.className || '').toLowerCase();
-    return (role === 'combobox' || role === 'listbox') && role !== 'option' || popup === 'listbox' || CUSTOM_SELECT_CLASS_RE.test(className);
+    return role === 'combobox' || role === 'listbox' || popup === 'listbox' || CUSTOM_SELECT_CLASS_RE.test(className);
   }
   function isScannableControl(element) {
     if (!element || element.disabled || element.hidden) return false;
@@ -370,8 +370,6 @@
     if (ownerDocument && ownerDocument.querySelectorAll) return ownerDocument;
     return typeof document !== 'undefined' && document.querySelectorAll ? document : null;
   }
-  // A control can live in a shadow root while its dropdown or calendar is portalled to the page
-  // document, so anything hunting a floating panel has to look in both.
   // A control can live in a shadow root while its dropdown or calendar is portalled to the page
   // document, so anything hunting a floating panel has to look in all three: the control's own
   // root, its document (where a panel inside an iframe lives) and the top document.
@@ -1715,18 +1713,57 @@
     });
     return drafts;
   }
+  // chrome.storage.local has no compare-and-swap, so a draft is written as a read-modify-write and
+  // then read back. The popup and the editor do their own read-modify-write of the same key, and
+  // the content script cannot share their merge: it is injected on its own and cannot require
+  // shared.js. When another page's write lands between this read and this write, its copy was
+  // taken before the draft existed and the draft is gone from storage again. The read-back sees
+  // that and re-applies the draft on top of whatever is stored now, so the other page's change
+  // survives instead of being overwritten with a stale profile.
+  //
+  // This narrows the window rather than closing it: a write landing between the read-back and the
+  // next attempt is still lost by whoever writes second. Only a storage-side atomic compare-and-set
+  // would remove that, and chrome.storage does not offer one.
+  var DRAFT_WRITE_ATTEMPTS = 3;
+  function draftMatches(item, draft) {
+    return Boolean(item) && item.site_key === draft.site_key && item.fingerprint === draft.fingerprint
+      && item.profile_key === draft.profile_key;
+  }
+  function draftIsStored(stored, draft) {
+    return (stored || []).some(function (item) {
+      return draftMatches(item, draft) && String(item.value) === String(draft.value);
+    });
+  }
+  async function writeDraft(draft, io, attemptsLeft) {
+    var data = await io.read();
+    var profile = (data && data.resumeProfile) || {};
+    profile.site_drafts = upsertDrafts(Array.isArray(profile.site_drafts) ? profile.site_drafts : [], [draft], new Date().toISOString());
+    await io.write(profile);
+    var confirmed = await io.read();
+    if (draftIsStored(confirmed && confirmed.resumeProfile && confirmed.resumeProfile.site_drafts, draft)) return true;
+    if (attemptsLeft > 1) return writeDraft(draft, io, attemptsLeft - 1);
+    return false;
+  }
+  function localDraftIo() {
+    return {
+      read: function () {
+        return new Promise(function (resolve) {
+          chrome.storage.local.get({ resumeProfile: {} }, function (data) { resolve(data || {}); });
+        });
+      },
+      write: function (profile) {
+        return new Promise(function (resolve) {
+          chrome.storage.local.set({ resumeProfile: profile }, function () { resolve(); });
+        });
+      }
+    };
+  }
+  // Drafts arrive one keystroke at a time, so the writes are queued: two in flight at once would
+  // each read the profile before the other's write and the second would drop the first.
   var draftWriteChain = null;
   function updateLocalDraft(draft) {
     if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) return;
-    var write = function () {
-      return new Promise(function (resolve) {
-        chrome.storage.local.get({ resumeProfile: { site_drafts: [] } }, function (data) {
-          var profile = data.resumeProfile || {};
-          profile.site_drafts = upsertDrafts(Array.isArray(profile.site_drafts) ? profile.site_drafts : [], [draft], new Date().toISOString());
-          chrome.storage.local.set({ resumeProfile: profile }, function () { resolve(); });
-        });
-      });
-    };
+    var write = function () { return writeDraft(draft, localDraftIo(), DRAFT_WRITE_ATTEMPTS); };
     var pending = draftWriteChain ? draftWriteChain.then(write, write) : write();
     draftWriteChain = pending.then(function () {}, function () {});
   }
@@ -1815,5 +1852,5 @@
     }, 3000);
     return true;
   }
-  return { normalizeText: normalizeText, controlSelector: controlSelector, isRendered: isRendered, nearbyChoiceText: nearbyChoiceText, labelVariants: labelVariants, withoutLeadingQualifier: withoutLeadingQualifier, isPlaceholderValue: isPlaceholderValue, buildLearnedMap: buildLearnedMap, findLearnedValue: findLearnedValue, leafProfileKey: leafProfileKey, learnedMatch: learnedMatch, fieldConfidence: fieldConfidence, labelMatchStrength: labelMatchStrength, profileLabelStrength: profileLabelStrength, matchChoiceIndexes: matchChoiceIndexes, choiceTokens: choiceTokens, booleanChoice: booleanChoice, choiceItems: choiceItems, choiceText: choiceText, scanRoots: scanRoots, searchRoots: searchRoots, allControls: allControls, controlIndex: controlIndex, isLiveControl: isLiveControl, deriveLabel: deriveLabel, flattenProfile: flattenProfile, matchSelectOption: matchSelectOption, matchDateSelectOption: matchDateSelectOption, matchChoice: matchChoice, isSubmitLike: isSubmitLike, isSensitiveField: isSensitiveField, isGenericPrompt: isGenericPrompt, cleanFieldLabel: cleanFieldLabel, isUsableFieldLabel: isUsableFieldLabel, shouldIncludeCandidate: shouldIncludeCandidate, customControlValue: customControlValue, readControlValue: readControlValue, isScannableControl: isScannableControl, isCustomSelectControl: isCustomSelectControl, isEditableControl: isEditableControl, isTextEntryControl: isTextEntryControl, readEditableText: readEditableText, isCustomChoiceGroup: isCustomChoiceGroup, customChoiceItems: customChoiceItems, customChoiceValue: customChoiceValue, customChoiceSelected: customChoiceSelected, previewCustomChoice: previewCustomChoice, isKnownPopupRoot: isKnownPopupRoot, panelRootFor: panelRootFor, findCascadeConfirm: findCascadeConfirm, customChoiceText: customChoiceText, customChoiceState: customChoiceState, fillCustomChoice: fillCustomChoice, isClickHazard: isClickHazard, dispatchOpenSequence: dispatchOpenSequence, valueParts: valueParts, regionKey: regionKey, matchCascadeOption: matchCascadeOption, findCustomOptions: findCustomOptions, combineContextLabel: combineContextLabel, findContainerLabel: findContainerLabel, preferredContainerSelectors: preferredContainerSelectors, isNavigationOnlyLabel: isNavigationOnlyLabel, isDateComponentLabel: isDateComponentLabel, dateComponentValue: dateComponentValue, dedupeControlDescriptors: dedupeControlDescriptors, dedupeFieldDescriptors: dedupeFieldDescriptors, valueMatchesLabel: valueMatchesLabel, setNativeValue: setNativeValue, makeFingerprint: makeFingerprint, siteMappingMatches: siteMappingMatches, collectDraftValues: collectDraftValues, upsertDrafts: upsertDrafts, scan: scan, fill: fill, rememberFields: rememberFields, highlight: highlight, clearHighlight: clearHighlight };
+  return { normalizeText: normalizeText, controlSelector: controlSelector, isRendered: isRendered, nearbyChoiceText: nearbyChoiceText, labelVariants: labelVariants, withoutLeadingQualifier: withoutLeadingQualifier, isPlaceholderValue: isPlaceholderValue, buildLearnedMap: buildLearnedMap, findLearnedValue: findLearnedValue, leafProfileKey: leafProfileKey, learnedMatch: learnedMatch, fieldConfidence: fieldConfidence, labelMatchStrength: labelMatchStrength, profileLabelStrength: profileLabelStrength, matchChoiceIndexes: matchChoiceIndexes, choiceTokens: choiceTokens, booleanChoice: booleanChoice, choiceItems: choiceItems, choiceText: choiceText, scanRoots: scanRoots, searchRoots: searchRoots, allControls: allControls, controlIndex: controlIndex, isLiveControl: isLiveControl, deriveLabel: deriveLabel, flattenProfile: flattenProfile, matchSelectOption: matchSelectOption, matchDateSelectOption: matchDateSelectOption, matchChoice: matchChoice, isSubmitLike: isSubmitLike, isSensitiveField: isSensitiveField, isGenericPrompt: isGenericPrompt, cleanFieldLabel: cleanFieldLabel, isUsableFieldLabel: isUsableFieldLabel, shouldIncludeCandidate: shouldIncludeCandidate, customControlValue: customControlValue, readControlValue: readControlValue, isScannableControl: isScannableControl, isCustomSelectControl: isCustomSelectControl, isEditableControl: isEditableControl, isTextEntryControl: isTextEntryControl, readEditableText: readEditableText, isCustomChoiceGroup: isCustomChoiceGroup, customChoiceItems: customChoiceItems, customChoiceValue: customChoiceValue, customChoiceSelected: customChoiceSelected, previewCustomChoice: previewCustomChoice, isKnownPopupRoot: isKnownPopupRoot, panelRootFor: panelRootFor, findCascadeConfirm: findCascadeConfirm, customChoiceText: customChoiceText, customChoiceState: customChoiceState, fillCustomChoice: fillCustomChoice, isClickHazard: isClickHazard, dispatchOpenSequence: dispatchOpenSequence, valueParts: valueParts, regionKey: regionKey, matchCascadeOption: matchCascadeOption, findCustomOptions: findCustomOptions, combineContextLabel: combineContextLabel, findContainerLabel: findContainerLabel, preferredContainerSelectors: preferredContainerSelectors, isNavigationOnlyLabel: isNavigationOnlyLabel, isDateComponentLabel: isDateComponentLabel, dateComponentValue: dateComponentValue, dedupeControlDescriptors: dedupeControlDescriptors, dedupeFieldDescriptors: dedupeFieldDescriptors, valueMatchesLabel: valueMatchesLabel, setNativeValue: setNativeValue, makeFingerprint: makeFingerprint, siteMappingMatches: siteMappingMatches, collectDraftValues: collectDraftValues, upsertDrafts: upsertDrafts, draftIsStored: draftIsStored, writeDraft: writeDraft, scan: scan, fill: fill, rememberFields: rememberFields, highlight: highlight, clearHighlight: clearHighlight };
 }));

@@ -31,6 +31,9 @@ foreach ($step in $steps) { $byStage[$step.stage] = $step }
 if (-not $byStage.ContainsKey('after scan')) { throw 'The scan step did not run.' }
 if (-not $byStage.ContainsKey('stored scan') -or $byStage['stored scan'].present -ne $true) { throw 'The scan result was not persisted for popup restoration.' }
 if ($byStage['stored scan'].candidateCount -ne 2) { throw "The persisted scan should contain two candidates, got $($byStage['stored scan'].candidateCount)." }
+# The cache sits in storage beside the profile, so a sensitive column is persisted as an identity
+# and nothing else: its value has to come back from the profile, not from a second copy.
+if ($byStage['stored scan'].sensitiveValue) { throw "The persisted scan carries the sensitive value '$($byStage['stored scan'].sensitiveValue)'." }
 if ($byStage['after scan'].rows[0].badge -ne '资料里没有') { throw 'An unrecognised field should start as 资料里没有.' }
 if ($byStage['after scan'].saveDisabled -ne $true) { throw 'Save should be disabled before any choice is made.' }
 
@@ -93,6 +96,9 @@ if (-not $restoreMatch.Success) { throw 'The restore fixture produced no result.
 $restore = [System.Net.WebUtility]::HtmlDecode($restoreMatch.Groups[1].Value) | ConvertFrom-Json
 if ($restore.restored -ne $true) { throw 'Reopening the popup did not restore the previous scan.' }
 if ($restore.rows -ne 2) { throw "Expected 2 restored rows, got $($restore.rows)." }
+# The stored copy has no sensitive value, so the row only shows one if it was read back from the
+# profile on the way in.
+if ($restore.sensitiveValue -ne '210000200001010000') { throw "A restored sensitive row should offer the profile value, got '$($restore.sensitiveValue)'." }
 if ($restore.status -notmatch '恢复') { throw "The status line should mention the restored scan, got '$($restore.status)'." }
 
-Write-Output ("Popup smoke test passed: scan, assign, save and fill consistent; " + "sensitive column stays unticked until asked; reopening restores the scan; " + "资料速查 lists " + $quick.count + " entries.")
+Write-Output ("Popup smoke test passed: scan, assign, save and fill consistent; " + "sensitive column stays unticked until asked and never lands in the scan cache; " + "reopening restores the scan and reads the sensitive value back from the profile; " + "资料速查 lists " + $quick.count + " entries.")

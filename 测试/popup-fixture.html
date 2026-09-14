@@ -158,11 +158,19 @@
       sensitive: true, remember: false, fingerprint: 'text:idnumber',
       controlType: 'input', siteKey: 'https://example.com'
     }];
+    // What persistLastScan actually writes: a sensitive row keeps its identity, never its value.
+    var STORED_CANDIDATES = CANDIDATES.map(function (c) {
+      if (!c.sensitive) return c;
+      var copy = Object.assign({}, c);
+      copy.proposedValue = '';
+      copy.currentValue = '';
+      return copy;
+    });
     window.__saved = null;
     window.__lastScan = null;
     window.__filled = null;
     window.chrome = {
-      runtime: { lastError: null, getManifest: function () { return { version: '0.3.3' }; }, openOptionsPage: function () {} },
+      runtime: { lastError: null, getManifest: function () { return { version: '0.3.4' }; }, openOptionsPage: function () {} },
       storage: { local: {
         get: function (defaults, callback) { callback({ resumeProfile: { basic: { name: '示例姓名', id_number: '210000200001010000' }, education: [{ school: '示例大学', major: '电子信息', courses: ['电路原理'] }], additional: { specialty: '长跑', hobbies: '摄影' } }, resumeAccent: '#0078d4', resumeLastScan: null }); },
         set: function (value, callback) { if (value.resumeLastScan) window.__lastScan = value.resumeLastScan; else window.__saved = value; if (callback) callback(); }
@@ -170,7 +178,7 @@
       tabs: {
         query: function (query, callback) { callback([{ id: 1, url: 'https://example.com/apply' }]); },
         sendMessage: function (tabId, message, callback) {
-          if (message.type === 'ping') return callback({ version: '0.3.3' });
+          if (message.type === 'ping') return callback({ version: '0.3.4' });
           if (message.type === 'scan') return callback({ candidates: CANDIDATES });
           if (message.type === 'fill') { window.__filled = message.fields; return callback({ results: [{ id: 'x', status: 'filled' }] }); }
           callback({ results: [] });
@@ -208,7 +216,11 @@
         steps.push({
           stage: 'stored scan',
           present: Boolean(window.__lastScan),
-          candidateCount: window.__lastScan && window.__lastScan.candidates ? window.__lastScan.candidates.length : 0
+          candidateCount: window.__lastScan && window.__lastScan.candidates ? window.__lastScan.candidates.length : 0,
+          // A sensitive column's value must not be in the cache at all.
+          sensitiveValue: window.__lastScan && window.__lastScan.candidates
+            ? (window.__lastScan.candidates.filter(function (c) { return c.sensitive; })[0] || {}).proposedValue
+            : null
         });
         // The sensitive row must arrive unticked but still tickable.
         var sensitiveRow = document.querySelectorAll('.candidate')[1];

@@ -34,6 +34,14 @@ MOCK = """  <script>
       sensitive: true, remember: false, fingerprint: 'text:idnumber',
       controlType: 'input', siteKey: 'https://example.com'
     }];
+    // What persistLastScan actually writes: a sensitive row keeps its identity, never its value.
+    var STORED_CANDIDATES = CANDIDATES.map(function (c) {
+      if (!c.sensitive) return c;
+      var copy = Object.assign({}, c);
+      copy.proposedValue = '';
+      copy.currentValue = '';
+      return copy;
+    });
     window.__saved = null;
     window.__lastScan = null;
     window.__filled = null;
@@ -82,7 +90,11 @@ DRIVER = """  <script>
         steps.push({
           stage: 'stored scan',
           present: Boolean(window.__lastScan),
-          candidateCount: window.__lastScan && window.__lastScan.candidates ? window.__lastScan.candidates.length : 0
+          candidateCount: window.__lastScan && window.__lastScan.candidates ? window.__lastScan.candidates.length : 0,
+          // A sensitive column's value must not be in the cache at all.
+          sensitiveValue: window.__lastScan && window.__lastScan.candidates
+            ? (window.__lastScan.candidates.filter(function (c) { return c.sensitive; })[0] || {}).proposedValue
+            : null
         });
         // The sensitive row must arrive unticked but still tickable.
         var sensitiveRow = document.querySelectorAll('.candidate')[1];
@@ -140,6 +152,10 @@ RESTORE_DRIVER = """  <script>
         restored: Boolean(review) && !review.hidden,
         rows: rows.length,
         badges: rows.map(function (card) { return (card.querySelector('.confidence') || {}).textContent; }),
+        // The stored copy holds no sensitive value, so a restored row has to get it back from the
+        // profile instead of from the cache.
+        sensitiveValue: rows[1] ? (rows[1].querySelector('input[type=text]') || {}).value : null,
+        sensitiveHint: rows[1] ? (rows[1].querySelector('small') || {}).textContent : null,
         status: document.getElementById('profileStatus').textContent
       });
     }, 150);
@@ -147,7 +163,7 @@ RESTORE_DRIVER = """  <script>
 """
 
 STORED_SCAN = ("{ url: 'https://example.com/apply', siteKey: 'https://example.com', "
-               "activeFilter: 'all', candidates: CANDIDATES }")
+               "activeFilter: 'all', candidates: STORED_CANDIDATES }")
 
 
 def assemble(last_scan_json, driver):
