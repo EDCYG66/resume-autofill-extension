@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>repeated record sections</title></head>
+<body>
+  <!--
+    A recruitment form whose record sections repeat: 教育经历 rendered twice with the same column
+    wording and the same name attributes, which is what a two-row 网申 section looks like. Wording
+    alone cannot tell the rows apart, so every column has to stay its own candidate.
+
+    Three shapes that used to fail are pinned here:
+      1. two rows carrying the same label AND the same name  -> both must be scanned and filled with
+         their own record's value, not merged into the first row;
+      2. a column whose *current content* mentions 上传/确认  -> still scanned and still filled (it is
+         data, not a button caption);
+      3. a column nothing matches, assigned by hand the way popup.js does -> the payload popup.js
+         sends has to be accepted by fill() instead of coming back 'skipped'.
+  -->
+  <div id="repeat-fixture">
+    <form id="appform">
+      <div class="form-item">
+        <label class="form-item__text">开始时间</label>
+        <input id="edu1-start" name="startDate" type="text">
+      </div>
+      <div class="form-item">
+        <label class="form-item__text">开始时间</label>
+        <input id="edu2-start" name="startDate" type="text">
+      </div>
+      <div class="form-item">
+        <label class="form-item__text">学校名称</label>
+        <input id="edu1-school" name="school" type="text">
+      </div>
+      <div class="form-item">
+        <label class="form-item__text">学校名称</label>
+        <input id="edu2-school" name="school" type="text">
+      </div>
+
+      <div class="form-item">
+        <label class="form-item__text">自我评价</label>
+        <textarea id="self-eval" name="selfEvaluation">负责数据上传与确认工作</textarea>
+      </div>
+
+      <div class="form-item">
+        <label class="form-item__text">学习经历</label>
+        <input id="unknown-slot" name="studyExp" type="text">
+      </div>
+
+      <button type="submit" id="submit-btn">提交申请</button>
+    </form>
+  </div>
+  <pre id="smoke-result"></pre>
+
+  <script>
+    window.submitAttempts = 0;
+    document.getElementById('appform').addEventListener('submit', function (event) {
+      event.preventDefault();
+      window.submitAttempts += 1;
+    });
+  </script>
+  <script src="../content.js"></script>
+  <script src="../profile-parser.js"></script>
+  <script>
+    window.addEventListener('load', function () {
+      var output = document.getElementById('smoke-result');
+      function report(payload) { output.textContent = JSON.stringify(payload); }
+      function valueOf(id) {
+        var control = document.getElementById(id);
+        return control && typeof control.value === 'string' ? control.value.trim() : '';
+      }
+      function statuses(results) {
+        return (results || []).map(function (item) { return item && item.status; });
+      }
+
+      try {
+        var profile = {
+          basic: { name: '测试姓名' },
+          // Two records, so the two rows of the repeated section each have their own value.
+          education: [
+            { school: '第一大学', start_date: '2021-09' },
+            { school: '第二大学', start_date: '2017-09' }
+          ],
+          self_evaluation: '负责服务端开发与维护'
+        };
+
+        var all = ResumeContent.scan(profile, { siteKey: 'file://repeat-record-fixture' });
+        var startTimes = all.filter(function (item) { return item.label === '开始时间'; });
+        var unknown = all.filter(function (item) { return item.label === '学习经历'; })[0] || null;
+
+        // Everything the scan resolved is filled as the popup would fill it: only candidates that
+        // carry a value, a profile key and are not 'none'.
+        var fillable = all.filter(function (item) {
+          return item.proposedValue && item.profileKey && item.confidence !== 'none';
+        });
+
+        ResumeContent.fill(fillable).then(function (results) {
+          // Shape the hand-assigned column exactly the way popup.js does before it sends 帮我填上:
+          // the applicant picked a built-in field, the value comes from the profile, and the
+          // isNewField flag stays set because the card still renders its 换成别的 summary.
+          var assigned = null;
+          if (unknown) {
+            assigned = Object.assign({}, unknown);
+            assigned.isNewField = true;
+            assigned.assignedKey = 'basic.name';
+            assigned.profileKey = 'basic.name';
+            assigned.proposedValue = ResumeProfile.readAssignedValue(profile, 'basic.name');
+            assigned.confidence = 'high';
+            assigned.selected = true;
+          }
+          var wouldSend = Boolean(assigned && assigned.selected && (!assigned.isNewField || assigned.assignedKey));
+
+          return Promise.resolve(ResumeContent.fill(assigned ? [assigned] : [])).then(function (assignedResults) {
+            report({
+              startTimeCount: startTimes.length,
+              startTimeKeys: startTimes.map(function (item) { return item.profileKey; }),
+              edu1Start: valueOf('edu1-start'),
+              edu2Start: valueOf('edu2-start'),
+              edu1School: valueOf('edu1-school'),
+              edu2School: valueOf('edu2-school'),
+              selfEvaluation: valueOf('self-eval'),
+              selfEvaluationScanned: all.some(function (item) { return item.label === '自我评价'; }),
+              assignedScanned: Boolean(unknown),
+              assignedWouldSend: wouldSend,
+              assignedFillStatuses: statuses(assignedResults),
+              assignedValue: valueOf('unknown-slot'),
+              scannedCount: all.length,
+              fillStatuses: statuses(results),
+              submitAttempts: window.submitAttempts
+            });
+          });
+        }, function (error) {
+          report({ error: String(error && error.stack || error) });
+        });
+      } catch (error) {
+        report({ error: String(error && error.stack || error) });
+      }
+    });
+  </script>
+</body>
+</html>

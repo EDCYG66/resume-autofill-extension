@@ -127,3 +127,27 @@ test('both pages load shared.js before their own script', () => {
     assert.ok(shared < own, pair[0] + ' should load shared.js before ' + pair[1]);
   });
 });
+
+// The key of a 自己起个名 record addresses it from site_mappings and site_drafts, so it has to be
+// unique per column. Flattening the fingerprint to its ASCII letters turned every Chinese label into
+// the same key ('text'), and a second freshly named column on one page then found the first one's
+// record and wrote into it. customFieldKey is private to popup.js and popup.js runs on load, so the
+// real function is lifted out of the source and exercised here rather than reimplemented.
+test('the custom field key is a distinct, stable key per column', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'popup.js'), 'utf8');
+  const body = /function fingerprintHash\(value\)\s*\{([\s\S]*?)\n  \}/.exec(source);
+  assert.ok(body, 'popup.js should declare fingerprintHash');
+  assert.ok(/customFieldKey\(candidate\)/.test(source), 'the custom field record should be keyed by customFieldKey');
+  assert.ok(
+    !/fingerprint\.replace\(\/\[\^a-zA-Z0-9_\]/.test(source),
+    'popup.js should not flatten the fingerprint down to its ASCII letters any more'
+  );
+
+  const hash = new Function('value', body[1]);
+  const keyFor = (fingerprint) => 'cf_' + hash(fingerprint);
+  // These are the fingerprints makeFingerprint produces for wording-only columns: the label is the
+  // only stable part, and the old ASCII slug reduced all three of them to 'text'.
+  const keys = ['text:活动名称', 'text:担任职务', 'text:获奖情况'].map(keyFor);
+  assert.equal(new Set(keys).size, 3, 'three different columns produced ' + JSON.stringify(keys));
+  assert.equal(keyFor('text:活动名称'), keys[0], 'the key has to be stable across calls');
+});

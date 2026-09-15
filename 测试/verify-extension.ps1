@@ -23,6 +23,7 @@ $required = @(
   '测试/appform-smoke.ps1','测试/dynamic-fixture.html','测试/dynamic-smoke.ps1','测试/pack-smoke.ps1',
   '测试/shared.test.js','测试/shadow-fixture.html','测试/shadow-smoke.ps1',
   '测试/phoenix-fixture.html','测试/phoenix-smoke.ps1',
+  '测试/repeat-record-fixture.html','测试/repeat-record-smoke.ps1',
   'CHANGELOG.md',
   'tools/make_preview_images.ps1',
   'docs/popup-review.png','docs/popup-quick-copy.png','docs/options-editor.png'
@@ -199,7 +200,10 @@ if (Test-Path -LiteralPath $personalFile) {
     }
     $text = Get-Content -Raw -Encoding UTF8 -LiteralPath $file.FullName
     foreach ($secret in $personalValues + @('身份证正面','身份证反面')) {
-      if ($text.Contains($secret)) { throw "Personal value found in ${relative}: $secret" }
+      # An empty text file is legitimate - a placeholder, or something a tool generated - and
+      # Get-Content -Raw hands back $null for it, which has no .Contains method. Without this the
+      # whole privacy scan dies with a null-method error naming no file, which reads as a leak.
+      if ($null -ne $text -and $text.Contains($secret)) { throw "Personal value found in ${relative}: $secret" }
     }
   }
   Write-Output 'Personal value scan passed: no personal value appears in a committed file.'

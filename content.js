@@ -343,10 +343,24 @@
       return true;
     });
   }
+  // The place a control sits in, which is what keeps two rows of one record section apart. A
+  // repeated section renders one form-item per row, so the container is the row; a control with no
+  // form-item wrapper is its own scope. Only dedupeFieldDescriptors reads this.
+  function controlScope(control) {
+    if (!control) return '';
+    return scopeKey(nearestResumeContainer(control) || control);
+  }
+  // Collapses descriptors that describe the *same* visible field, which is what happens when one
+  // column is drawn twice (a native control plus the component that decorates it). Wording alone
+  // cannot be the identity: two rows of a repeated section share their label and often their name,
+  // and keying on wording alone merged 教育经历 2's 开始时间 into 教育经历 1's and left the second
+  // row unfillable. scan() therefore supplies the control's own `scope`, and the control's role is
+  // read from `controlType` (the field scan() actually sets — it has no `type`).
   function dedupeFieldDescriptors(descriptors) {
     var seen = Object.create(null);
     return (descriptors || []).filter(function (descriptor) {
-      var key = normalizeText((descriptor.label || '') + '|' + (descriptor.name || '') + '|' + (descriptor.type || ''));
+      var role = normalizeText(descriptor.controlType || descriptor.type || '');
+      var key = normalizeText((descriptor.label || '') + '|' + (descriptor.name || '') + '|' + role + '|' + (descriptor.scope || ''));
       if (!key || !seen[key]) { seen[key] = true; return true; }
       return false;
     });
@@ -673,8 +687,15 @@
     if (learned && item && learnedMatch(learned, label, item.profileKey)) return true;
     return profileLabelStrength(item, label) !== 'none';
   }
-  function fieldConfidence(match, mapping, label, matchLabel, learned) {
-    if (mapping) return 'high';
+  // A confirmed site mapping is the applicant's own instruction and outranks wording — but only
+  // while the record it names still holds a value. `mappingResolved` is that check and is required:
+  // by the time this runs, `match` has already been overwritten by the wording fallback, so it
+  // cannot answer the question itself. A mapping whose record has since been emptied or deleted used
+  // to report 'high' regardless, and scan() then marked whichever value the fallback happened to
+  // find as already used, stealing it from the column that needed it. Omitting the flag therefore
+  // falls back to grading the wording, which is the safe answer rather than the flattering one.
+  function fieldConfidence(match, mapping, label, matchLabel, learned, mappingResolved) {
+    if (mapping && mappingResolved) return 'high';
     if (!match) return 'none';
     if (profileLabelStrength(match, label, learned) === 'exact') return 'high';
     if (profileLabelStrength(match, matchLabel, learned) === 'exact') return 'high';
@@ -815,7 +836,34 @@
     return -1;
   }
   function matchChoice(choices, expected) { return matchSelectOption(choices.map(function (choice) { return { value: choice.value, text: textOf(choice) || choice.value }; }), expected); }
-  function isSubmitLike(control) { var type = normalizeText(control && control.type); var text = normalizeText(control && (control.text || control.label || control.value || (isEditableControl(control) ? '' : textOf(control)))); return ['submit', 'reset', 'image'].indexOf(type) >= 0 || /(提交|保存|下一步|下一页|确认|投递|上传|submit|save|next|apply|upload)/i.test(text); }
+  // Only a control that renders as a button can be a submit control.
+  //
+  // The wording of a text box, a textarea, a select, a contenteditable box or a picker is a *value*:
+  // the applicant's own writing, or the option the picker currently displays. Reading it as a button
+  // caption made a self-evaluation already saying 负责数据上传与确认 look like a submit button, and
+  // the whole column then vanished from the scan with no message. Those elements are therefore never
+  // submit-like. A generic element is still judged by its text, because a drawn "下一步" control
+  // carries no other marker, and refusing to fill one is the safe side of that trade.
+  function holdsValueInsteadOfCaption(control) {
+    var tagName = String(control && control.tagName || '').toLowerCase();
+    if (tagName === 'textarea' || tagName === 'select') return true;
+    if (tagName === 'input') return ['button', 'submit', 'reset', 'image'].indexOf(normalizeText(control.type)) < 0;
+    if (isEditableControl(control)) return true;
+    return isCustomSelectControl(control);
+  }
+  var SUBMIT_WORD_RE = /(提交|保存|下一步|下一页|确认|投递|上传|submit|save|next|apply|upload)/i;
+  function isSubmitLike(control) {
+    if (!control) return false;
+    var type = normalizeText(control.type);
+    if (type === 'submit' || type === 'reset' || type === 'image') return true;
+    if (holdsValueInsteadOfCaption(control)) return false;
+    var aria = control.getAttribute ? control.getAttribute('aria-label') : '';
+    var caption = normalizeText([textOf(control), control.text, control.label, aria].filter(Boolean).join(' '));
+    if (SUBMIT_WORD_RE.test(caption)) return true;
+    // `value` is a caption only where the platform puts one: the button-ish inputs. A
+    // `<button value="1">保存</button>` keeps its wording in the text node and is caught above.
+    return type === 'button' && SUBMIT_WORD_RE.test(normalizeText(control.value));
+  }
   function findProfileValue(label, values, used, learned) {
     var candidates = [];
     (values || []).forEach(function (item) {
@@ -1074,12 +1122,12 @@
     var controls = allControls().filter(isScannableControl);
     controls = dedupeControlDescriptors(controls);
     return dedupeFieldDescriptors(controls.filter(function (control) { return isCustomChoiceGroup(control) || !isSubmitLike(control); }).map(function (control, index) {
-      var label = cleanFieldLabel(deriveLabel(control)); var fingerprint = makeFingerprint(control, label); var sensitive = isSensitiveField({ type: control.type || control.tagName, label: label, name: control.name, id: control.id, placeholder: control.placeholder });
-      var mapping = mappings.find(function (item) { return siteMappingMatches(item, siteKey, fingerprint, label); }); var match = mapping ? values.find(function (item) { return item.profileKey === mapping.profile_key; }) : null;
+      var label = cleanFieldLabel(deriveLabel(control)); var fingerprint = makeFingerprint(control, label); var sensitive = isSensitiveField({ type: control.type || control.tagName, label: label, name: control.name, id: control.id, placeholder: control.placeholder }); var scope = controlScope(control);
+      var mapping = mappings.find(function (item) { return siteMappingMatches(item, siteKey, fingerprint, label); }); var mapped = mapping ? values.find(function (item) { return item.profileKey === mapping.profile_key; }) : null; var match = mapped;
       var matchLabel = [label, control.name || '', control.id || '', control.getAttribute && control.getAttribute('aria-label') || ''].filter(Boolean).join(' '); if (!match) match = findLearnedValue(label, values, used, learned);
       if (!match) match = findProfileValue(matchLabel, values, used, learned);
       var currentValue = isCustomChoiceGroup(control) ? customChoiceValue(control) : isCustomSelectControl(control) ? customControlValue(control) : isEditableControl(control) ? textOf(control).trim() : control.value || '';
-      var draft = mapping && findDraft(profile, siteKey, fingerprint, mapping.profile_key); var sourceValue = draft ? draft.value : match ? match.value : currentValue; var isNewField = !match; var confidence = fieldConfidence(match, mapping, label, matchLabel, learned);
+      var draft = mapping && findDraft(profile, siteKey, fingerprint, mapping.profile_key); var sourceValue = draft ? draft.value : match ? match.value : currentValue; var isNewField = !match; var confidence = fieldConfidence(match, mapping, label, matchLabel, learned, Boolean(mapped));
       if (match && confidence === 'high' && !isDateComponentLabel(label)) used[match.profileKey] = true;
       var proposed = sourceValue;
       if (sourceValue) {
@@ -1093,7 +1141,7 @@
         else if (control.type === 'radio' || control.type === 'checkbox') proposed = previewChoice(control, sourceValue) || sourceValue;
         else if (isCustomChoiceGroup(control)) proposed = previewCustomChoice(control, sourceValue) || sourceValue;
       }
-      return { id: 'resume-field-' + index, controlType: isEditableControl(control) ? 'contenteditable' : control.tagName ? control.tagName.toLowerCase() : 'custom', label: label || '未标注字段', selectorHint: control.id ? '#' + cssEscape(control.id) : null, profileKey: match ? match.profileKey : null, confidence: confidence, currentValue: currentValue, proposedValue: proposed, isNewField: isNewField || !isUsableFieldLabel(label), fingerprint: fingerprint, siteKey: siteKey, sensitive: sensitive, remember: Boolean(mapping && mapping.confirmed), isDate: isDateField(control, label), name: control.name || '' };
+      return { id: 'resume-field-' + index, controlType: isEditableControl(control) ? 'contenteditable' : control.tagName ? control.tagName.toLowerCase() : 'custom', label: label || '未标注字段', selectorHint: control.id ? '#' + cssEscape(control.id) : null, profileKey: match ? match.profileKey : null, confidence: confidence, currentValue: currentValue, proposedValue: proposed, isNewField: isNewField || !isUsableFieldLabel(label), fingerprint: fingerprint, siteKey: siteKey, sensitive: sensitive, remember: Boolean(mapping && mapping.confirmed), isDate: isDateField(control, label), name: control.name || '', scope: scope };
     }).filter(shouldIncludeCandidate));
   }
   function isLiveControl(control) { return Boolean(control) && (typeof control.isConnected === 'undefined' || control.isConnected); }
@@ -1646,7 +1694,12 @@
     var controlMap = controlIndex();
     for (var index = 0; index < (fields || []).length; index++) {
       var field = fields[index];
-      if (!field || !field.proposedValue || isPlaceholderValue(field.proposedValue) || field.confidence === 'none' || field.isNewField) { results.push({ id: field && field.id, status: 'skipped', reason: '没有可用的已确认资料' }); continue; }
+      // `isNewField` on its own must not reject a field. The popup turns an unrecognised column into
+      // a fillable one by letting the applicant name what it really is, and it keeps the flag set so
+      // the card can render its "换成别的" summary — so the popup's payload and this guard used to
+      // disagree, and 记住这一项 followed by 帮我填上 reported "跳过 1 项" instead of filling. What
+      // makes a field fillable is a resolved profile key plus a value, not the absence of the flag.
+      if (!field || !field.proposedValue || isPlaceholderValue(field.proposedValue) || field.confidence === 'none' || (field.isNewField && !field.profileKey)) { results.push({ id: field && field.id, status: 'skipped', reason: '没有可用的已确认资料' }); continue; }
       var control = resolveField(field, controlMap); if (!control || (isSubmitLike(control) && !isCustomChoiceGroup(control))) { results.push({ id: field.id, status: 'skipped', reason: '控件不存在或为提交控件' }); continue; }
       if (control.tagName.toLowerCase() === 'select') {
         var expectedSelectValue = expectedFieldValue(field.proposedValue, field.label);

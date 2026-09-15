@@ -6,7 +6,7 @@
 所有资料只存在这台电脑的浏览器里，不联网、不上传。它不会自动打开网页，不会替你点提交、保存、下一步
 或上传——只改字段的值，剩下的一律你自己来。
 
-**当前版本 `0.3.4`。** 每个版本改了什么见 [CHANGELOG.md](CHANGELOG.md)。
+**当前版本 `0.3.5`。** 每个版本改了什么见 [CHANGELOG.md](CHANGELOG.md)。
 
 <img src="docs/popup-review.png" alt="弹窗：扫描之后逐项确认要填的字段" width="420">
 
@@ -306,8 +306,9 @@ key，无论从哪个文件夹加载，都是同一个扩展、同一份资料�
 （含注册页）、应届生求职网、国聘；表单结构另外校订过中国兵器工业集团招聘网（网申系统用的是 phoenix 组件）。
 抓取件只用来抄措辞，放在 `测试/抓取/`。
 
-回归基线是 `测试/sites-fixture.html` + `测试/sites-smoke.ps1`：当前要求 101 栏全部精确命中、0 个模糊命中、
-0 次误交。
+回归基线是 `测试/sites-fixture.html` + `测试/sites-smoke.ps1`：夹具里现有 104 栏，其中 101 栏精确命中、0 栏模糊、
+3 栏未命中（97% 可用）。脚本断言的是**可用率不低于 80%、一张具名清单（69 个栏目）必须精确命中、至少填进 60 栏、
+0 次误交**——不是「全部命中」。所以往夹具里加栏目时覆盖率掉一点不会失败，掉到 80% 以下才会。
 
 `测试/抓取/misses.txt` 记着抓取时没对上的文字，但里面绝大多数是「值」而不是「标签」——岗位名（「后端开发」）、
 公司名、学校名、城市名、下拉选项（「全日制」）、按钮文案。真正能补进别名表的栏目写法是个位数。
@@ -368,6 +369,7 @@ node --test 测试/*.test.js
 .\测试\frame-smoke.ps1
 .\测试\shadow-smoke.ps1
 .\测试\phoenix-smoke.ps1
+.\测试\repeat-record-smoke.ps1
 .\测试\options-smoke.ps1
 .\测试\popup-smoke.ps1
 .\测试\sites-smoke.ps1
@@ -375,10 +377,12 @@ node --test 测试/*.test.js
 .\测试\pack-smoke.ps1
 ```
 
-- `node --test` 跑三个文件、129 个用例：`content-helpers.test.js`（匹配与写入的纯函数）、
-  `profile-parser.test.js`（模板解析与序列化）、`shared.test.js`（三方合并与存储错误处理）。
+- `node --test` 跑三个文件、134 个用例：`content-helpers.test.js`（匹配与写入的纯函数）、
+  `profile-parser.test.js`（模板解析与序列化）、`shared.test.js`（三方合并、存储错误处理与两页共用的源码约定）。
 - 各 `*-smoke.ps1` 只使用 `测试/` 下的合成夹具，不读取真实简历。`shadow-smoke` 覆盖 open shadow root、
-  嵌套 shadow root 和 contenteditable；`phoenix-smoke` 覆盖无名标签版面下的下拉、纯 div 单选组和两级级联。
+  嵌套 shadow root 和 contenteditable；`phoenix-smoke` 覆盖无名标签版面下的下拉、纯 div 单选组和两级级联；
+  `repeat-record-smoke` 覆盖**同栏目措辞重复出现的记录段**（两行「开始时间」各自填自己的值）、现值里带
+  「上传/确认」字样的栏目，以及「自己起个名」指派之后真的能填上。
 - `verify-extension.ps1` 检查清单、权限、图标尺寸、固定 key、空白模板是否真的空白、zip 里有没有混进不该
   有的东西，并反向确认仓库里没有出现真实个人信息。
 - `pack-smoke.ps1` 是唯一验证「交付格式」的测试：它重新打包、按用户的方式解压，再把解压出的文件夹真正

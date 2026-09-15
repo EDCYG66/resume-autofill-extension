@@ -734,6 +734,32 @@
     });
   });
 
+  // The key of a 自己起个名 record has to be unique per column and stable across sessions, because
+  // site_mappings and site_drafts address the record by it. Flattening the fingerprint to an
+  // ASCII-only slug did neither: every Chinese label collapsed to the same slug ('text'), so adding
+  // a second freshly named column on one page found the first one's record and wrote into it, and
+  // both columns ended up sharing a single value. Hashing the whole fingerprint keeps the wording
+  // in the identity. customKey stays honoured when an older profile or an import supplies one.
+  function fingerprintHash(value) {
+    // FNV-1a, 32-bit, base36. A dependency-free hash is enough here: the population is the handful
+    // of custom fields one applicant adds, not an adversarial input.
+    var hash = 0x811c9dc5;
+    var text = String(value == null ? '' : value);
+    for (var index = 0; index < text.length; index++) {
+      hash ^= text.charCodeAt(index);
+      hash = (hash + ((hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24))) >>> 0;
+    }
+    return hash.toString(36);
+  }
+  function customFieldKey(candidate) {
+    var explicit = String(candidate.customKey || '').trim();
+    if (explicit) {
+      var slug = explicit.replace(/[^a-zA-Z0-9_]+/g, '_').replace(/^_+|_+$/g, '').toLowerCase();
+      return slug || 'custom_field';
+    }
+    return 'cf_' + fingerprintHash(candidate.fingerprint || candidate.label || 'field');
+  }
+
   function rememberConfirmedLabels() {
     var confirmed = state.candidates.filter(function (item) {
       return item.selected && !item.isNewField && item.profileKey && item.confidence === 'medium';
@@ -794,7 +820,7 @@
     state.profile.site_drafts = state.profile.site_drafts || [];
     var siteKey = newCandidates[0].siteKey || '';
     newCandidates.forEach(function (candidate) {
-      var key = (candidate.customKey || candidate.fingerprint.replace(/[^a-zA-Z0-9_]+/g, '_')).replace(/^_+|_+$/g, '').toLowerCase() || 'custom_field_' + Date.now();
+      var key = customFieldKey(candidate);
       var label = candidate.customLabel || candidate.label || key;
       var record = state.profile.custom_fields.find(function (item) { return item.key === key; });
       if (!record) {

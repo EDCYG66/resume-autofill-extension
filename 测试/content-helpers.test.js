@@ -337,7 +337,8 @@ test('keeps exact label hits at high confidence and fuzzy hits for review', () =
   assert.equal(Content.fieldConfidence({ profileKey: 'basic.name' }, null, '姓名', '姓名 fullName full-name'), 'high');
   // 常用联络邮箱 only overlaps the aliases as a substring, so it stays a fuzzy hit.
   assert.equal(Content.fieldConfidence({ profileKey: 'basic.email' }, null, '常用联络邮箱', '常用联络邮箱'), 'medium');
-  assert.equal(Content.fieldConfidence({ profileKey: 'custom_fields.1' }, { site_key: 'https://example.com' }, '岗位编号', '岗位编号'), 'high');
+  // The flag says the mapping itself resolved to a value; see the dedicated test below.
+  assert.equal(Content.fieldConfidence({ profileKey: 'custom_fields.1' }, { site_key: 'https://example.com' }, '岗位编号', '岗位编号', null, true), 'high');
   assert.equal(Content.fieldConfidence(null, null, '岗位编号', '岗位编号'), 'none');
 });
 
@@ -1008,3 +1009,87 @@ test('reads option wording from beside the control when it has no label', () => 
    assert.equal(Content.isClickHazard({ tagName: 'A', closest: (selector) => (selector === 'a[href]' ? {} : null) }), true);
    assert.equal(Content.isClickHazard({ tagName: 'LI', closest: () => null }), false);
  });
+
+test('does not read a data-bearing control as a submit button', () => {
+  // `.value` on a text box, a textarea or a select is the applicant's own data. Reading it as a
+  // button caption made any column already saying 上传/确认 vanish from the scan.
+  assert.equal(
+    Content.isSubmitLike({ type: 'textarea', tagName: 'TEXTAREA', value: '负责数据上传与确认工作' }),
+    false
+  );
+  assert.equal(
+    Content.isSubmitLike({ type: 'text', tagName: 'INPUT', value: '负责需求保存与归档' }),
+    false
+  );
+  assert.equal(
+    Content.isSubmitLike({ type: 'select-one', tagName: 'SELECT', value: '已提交', options: [] }),
+    false
+  );
+  // A custom select carries its wording where a button's caption would be, and is still not one.
+  assert.equal(
+    Content.isSubmitLike({ tagName: 'DIV', getAttribute: (name) => (name === 'role' ? 'combobox' : null), value: '确认' }),
+    false
+  );
+});
+
+test('still rejects the controls that really are submit buttons', () => {
+  assert.equal(Content.isSubmitLike({ type: 'submit', text: '提交申请' }), true);
+  assert.equal(Content.isSubmitLike({ type: 'reset' }), true);
+  assert.equal(Content.isSubmitLike({ type: 'image', tagName: 'INPUT' }), true);
+  // A bare <button> in a form: the DOM reports type 'submit' for it.
+  assert.equal(Content.isSubmitLike({ type: 'submit', tagName: 'BUTTON', textContent: '保存' }), true);
+  assert.equal(Content.isSubmitLike({ type: 'button', tagName: 'BUTTON', textContent: '保存' }), true);
+  assert.equal(Content.isSubmitLike({ type: 'button', tagName: 'BUTTON', textContent: '扫描字段' }), false);
+  assert.equal(Content.isSubmitLike({ type: 'button', text: '扫描字段' }), false);
+  // A <button value="1">保存</button> keeps its wording in the text node, not in value.
+  assert.equal(Content.isSubmitLike({ type: 'button', tagName: 'BUTTON', value: '1', textContent: '保存' }), true);
+  assert.equal(Content.isSubmitLike(null), false);
+});
+
+test('keeps two rows of a repeated section apart when deduplicating candidates', () => {
+  // Two rows of 教育经历 share their wording and their name attribute; only the form-item they sit
+  // in tells them apart. Keying on wording alone merged them and left the second row unfillable.
+  const firstRow = { id: 's1', controlType: 'input', label: '开始时间', name: 'startDate', scope: 'scope-1' };
+  const secondRow = { id: 's2', controlType: 'input', label: '开始时间', name: 'startDate', scope: 'scope-2' };
+  assert.deepEqual(
+    Content.dedupeFieldDescriptors([firstRow, secondRow]).map((item) => item.id),
+    ['s1', 's2']
+  );
+
+  // One column drawn twice inside the same container, with the same role, is still one column.
+  const drawnTwice = Object.assign({}, firstRow, { id: 's1-visible' });
+  assert.deepEqual(
+    Content.dedupeFieldDescriptors([firstRow, drawnTwice]).map((item) => item.id),
+    ['s1']
+  );
+
+  // The role is read from controlType, which is what scan() actually sets.
+  const asText = { id: 't', controlType: 'input', label: '学历', name: 'degree', scope: 'scope-1' };
+  const asSelect = { id: 's', controlType: 'select', label: '学历', name: 'degree', scope: 'scope-1' };
+  assert.deepEqual(
+    Content.dedupeFieldDescriptors([asText, asSelect]).map((item) => item.id),
+    ['t', 's']
+  );
+});
+
+test('a confirmed mapping only counts as exact when the profile really holds the value', () => {
+  const mapping = { site_key: 'https://example.com', profile_key: 'custom_fields.2', confirmed: 'true' };
+  const matched = { profileKey: 'custom_fields.2', label: '岗位编号', value: 'R-001' };
+  assert.equal(Content.fieldConfidence(matched, mapping, '岗位编号', '岗位编号', null, true), 'high');
+  // The record behind the mapping has been emptied or deleted. Claiming 'high' here made scan() mark
+  // whichever value the wording fallback found as used and steal it from the column that needed it,
+  // so the confidence has to grade the fallback match instead.
+  assert.equal(Content.fieldConfidence(null, mapping, '岗位编号', '岗位编号', null, false), 'none');
+  // A fallback hit is graded on its own wording, never on the mapping: here the profile key the
+  // mapping named is gone and the wording only matched another field, so it comes back as a fuzzy
+  // hit for review rather than 'high'.
+  const fallback = { profileKey: 'basic.name', label: '姓名', value: '测试姓名' };
+  assert.equal(Content.fieldConfidence(fallback, mapping, '岗位编号', '岗位编号', null, false), 'medium');
+  // Leaving the flag off must not flatter the answer: an unresolved mapping falls back to grading the
+  // wording, so a value whose own label does not match the page column stays a fuzzy hit for review
+  // instead of being presented as 已对上.
+  const oddLabel = { profileKey: 'custom_fields.2', label: '内部编号', value: 'R-001' };
+  assert.equal(Content.fieldConfidence(oddLabel, mapping, '岗位编号', '岗位编号'), 'medium');
+  assert.equal(Content.fieldConfidence(oddLabel, mapping, '岗位编号', '岗位编号', null, true), 'high');
+});
+
