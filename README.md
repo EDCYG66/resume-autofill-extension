@@ -5,7 +5,7 @@
 一个 Chrome 扩展（Manifest V3）。资料只存在你这台电脑的浏览器里：不联网、不上传、不需要账号。
 它**只改字段的值**——不会替你点提交、保存、下一步，也不会替你上传任何东西。
 
-**当前版本 `0.3.5`。** 每个版本改了什么见 [CHANGELOG.md](CHANGELOG.md)。
+**当前版本 `0.3.6`。** 每个版本改了什么见 [CHANGELOG.md](CHANGELOG.md)。
 
 <img src="docs/popup-review.png" alt="弹窗：扫描之后逐项确认要填的字段" width="420">
 

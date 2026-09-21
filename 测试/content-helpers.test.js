@@ -1093,3 +1093,37 @@ test('a confirmed mapping only counts as exact when the profile really holds the
   assert.equal(Content.fieldConfidence(oddLabel, mapping, '岗位编号', '岗位编号', null, true), 'high');
 });
 
+
+
+
+test('the content script answers ping with the exported version, not an out-of-scope variable', () => {
+  // The message listener lives in the UMD wrapper, outside the factory closure where
+  // CONTENT_VERSION is declared; referencing the bare name there throws, the catch answers
+  // { error } instead of { version }, and the popup then re-injects the script on every action.
+  const fsRead = require('fs');
+  const pathJoin = require('path');
+  const source = fsRead.readFileSync(pathJoin.join(__dirname, '..', 'content.js'), 'utf8');
+  assert.match(source, /sendResponse\(\{\s*version: api\.version\s*\}\)/, 'ping must read api.version');
+  assert.match(source, /return\s*\{\s*version: CONTENT_VERSION/, 'the exported api must carry the version');
+  // The manifest stays the single source of truth.
+  const manifest = JSON.parse(fsRead.readFileSync(pathJoin.join(__dirname, '..', 'manifest.json'), 'utf8'));
+  assert.ok(manifest.version);
+});
+
+test('rememberFields strips prior listeners before rewiring a control', () => {
+  // The popup asks the page to remember after every scan, and the content script can be injected
+  // more than once, so the same control must not accumulate another input/change handler and
+  // another MutationObserver per call. The unit environment has no DOM to run the real path, so
+  // this guards the source contract the same way shared.test.js does for the popup/options merge.
+  const fsRead = require('fs');
+  const pathJoin = require('path');
+  const source = fsRead.readFileSync(pathJoin.join(__dirname, '..', 'content.js'), 'utf8');
+  const start = source.indexOf('var rememberRegistry');
+  const end = source.indexOf('function clearHighlight');
+  assert.ok(start >= 0 && end > start, 'rememberFields wiring must carry a registry block');
+  const block = source.slice(start, end);
+  assert.match(block, /uninstallRemember/, 'the registry needs an uninstall step');
+  assert.match(block, /removeEventListener/, 'prior handlers must be removed before reuse');
+  assert.match(block, /observer\.disconnect/, 'the prior MutationObserver must be torn down');
+  assert.match(block, /installRememberEntry/, 'the fresh wiring must be recorded for the next call');
+});

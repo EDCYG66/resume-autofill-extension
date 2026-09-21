@@ -168,38 +168,19 @@
     return true;
   }
 
-  function mergeDuplicateEducation(records) {
-    var output = [];
-    var indexes = Object.create(null);
-    (records || []).forEach(function (input) {
-      var record = clone(input || {});
-      var key = [record.school, record.level, record.major, record.start_date, record.end_date]
-        .map(function (value) { return trim(value).toLowerCase(); }).join('|');
-      var duplicate = record.level === '本科' && key !== '||||' && indexes[key] != null;
-      if (!duplicate) {
-        if (record.level === '本科' && key !== '||||') indexes[key] = output.length;
-        output.push(record);
-        return;
-      }
-      var existing = output[indexes[key]];
-      Object.keys(record).forEach(function (field) {
-        if (isEmpty(existing[field]) && !isEmpty(record[field])) existing[field] = record[field];
-        if (Array.isArray(record[field])) {
-          existing[field] = (existing[field] || []).concat(record[field] || [])
-            .filter(function (item, index, array) { return item && array.indexOf(item) === index; });
-        }
-      });
-    });
-    return output;
-  }
-
-  function mergeRecordsByKey(records, keyFields) {
+  // One merge implementation for both jobs: drop duplicates by keyFields, filling empty fields
+  // from the later record and concatenating arrays without repeats. Which records are allowed to
+  // join the index varies -- education only merges duplicate bachelor records, every other record
+  // list merges as soon as the key is present -- so that rule is a parameter rather than a second
+  // copy of the loop.
+  function mergeRecordsByKey(records, keyFields, shouldIndex) {
     var output = [];
     var indexes = Object.create(null);
     (records || []).forEach(function (input) {
       var record = clone(input || {});
       var key = keyFields.map(function (field) { return trim(record[field]).toLowerCase(); }).join('|');
-      if (!key || keyFields.every(function (field) { return !trim(record[field]); })) {
+      var indexable = shouldIndex ? shouldIndex(record, key) : Boolean(key) && keyFields.some(function (field) { return trim(record[field]); });
+      if (!indexable) {
         output.push(record);
         return;
       }
@@ -218,6 +199,11 @@
       });
     });
     return output;
+  }
+  function mergeDuplicateEducation(records) {
+    return mergeRecordsByKey(records, ['school', 'level', 'major', 'start_date', 'end_date'], function (record, key) {
+      return record.level === '本科' && key !== '||||';
+    });
   }
 
   function recordKey(record, keyFields) {
@@ -423,3 +409,4 @@
     stringify: stringify
   };
 }));
+

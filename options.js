@@ -151,7 +151,11 @@
   function field(key, label, value, kind) {
     var wrapper = document.createElement('div'); wrapper.className = 'field ' + (kind === 'wide' ? 'wide' : kind === 'full' ? 'full' : '');
     var labelNode = document.createElement('label'); labelNode.textContent = label; labelNode.htmlFor = 'field-' + key;
-    var input = (kind === 'full' || key === 'research_direction' || key === 'introduction' || key === 'outcomes' || key === 'description' || key === 'gains' || key === 'answer') ? document.createElement('textarea') : document.createElement('input');
+    // Record fields are keyed `section-index-field`, so a bare key comparison can never hold for
+    // them; the suffix is what identifies the long-text fields (研究方向/项目介绍/描述 etc.).
+    var fieldName = key.indexOf('-') >= 0 ? key.split('-').pop() : key;
+    var longTextFields = ['research_direction', 'introduction', 'outcomes', 'description', 'gains', 'answer'];
+    var input = (kind === 'full' || longTextFields.indexOf(fieldName) >= 0) ? document.createElement('textarea') : document.createElement('input');
     input.id = 'field-' + key; input.value = value || '';
     if (kind === 'date') input.type = 'date';
     if (kind === 'period') {
@@ -160,7 +164,6 @@
       input.autocomplete = 'off';
       input.spellcheck = false;
     }
-    var fieldName = key.indexOf('-') >= 0 ? key.split('-').pop() : key;
     if (fieldName === 'id_number') input.placeholder = '18位居民身份证号';
     else if (fieldName === 'phone_code') input.placeholder = '+86';
     else if (fieldName === 'phone' || fieldName === 'emergency_phone') input.placeholder = '11位手机号码';

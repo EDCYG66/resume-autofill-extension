@@ -6,7 +6,7 @@
     if (root.chrome && chrome.runtime && chrome.runtime.onMessage && typeof document !== 'undefined') {
       chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         try {
-          if (message && message.type === 'ping') sendResponse({ version: CONTENT_VERSION });
+          if (message && message.type === 'ping') sendResponse({ version: api.version });
           else if (message && message.type === 'scan') sendResponse({ candidates: api.scan(message.profile || {}, message.context || {}) });
           else if (message && message.type === 'fill') api.fill(message.fields || []).then(function (results) { sendResponse({ results: results }); return; }, function () { sendResponse({ results: [], error: '填充失败' }); });
           else if (message && message.type === 'remember') sendResponse({ remembered: api.rememberFields(message.fields || [], message.siteKey || '') });
@@ -119,7 +119,6 @@
     duties: ['工作内容', '工作职责', '岗位职责', '主要职责', '实习内容'],
     // 自定义 / 其他
     self_evaluation: ['自我评价', '个人评价', '个人陈述', '自我介绍', '个人介绍', '自我描述', '個人簡介', '个人简介', '自我鉴定', '自我认知'],
-    political: ['政治面貌'],
     // 附加信息
     hobbies: ['兴趣爱好', '个人爱好', '业余爱好', '爱好'],
     specialty: ['特长', '个人特长', '专业特长', '技能特长', '专长'],
@@ -136,7 +135,7 @@
     score: ['成绩', '分数', '考试成绩']
   };
   var DISPLAY_LABELS = {
-    name: '姓名', gender: '性别', birth_date: '出生日期', ethnicity: '民族', native_place: '籍贯', political_status: '政治面貌', household_registration: '户口所在地', place_of_origin: '生源地', current_residence: '现居住地', mailing_address: '通信地址', phone: '联系电话', email: '邮箱', target_role: '期望职位', industry: '期望行业', city: '期望城市', salary: '期望薪资', employment_type: '工作性质', available_date: '可到岗时间', school: '学校', college: '学院', start_date: '开始时间', end_date: '结束时间', duration_years: '学制', level: '学历', admission_type: '招生类型', study_mode: '学习形式', degree_certificate: '学位证', degree_name: '学位名称', major: '专业', major_category: '专业分类', major_rank: '专业排名', gpa: '绩点/均分', research_direction: '研究方向', advisor: '导师', employer: '单位', role: '职位', organization: '组织', self_evaluation: '自我评价', courses: '课程', duties: '工作内容', description: '描述', introduction: '项目介绍', outcomes: '项目成果', related_paper: '相关论文', category: '分类', skills: '相关技能', evidence: '应用说明', question: '题目', answer: '回答', custom_fields: '自定义字段', phone_code: '手机区号 / 类别', id_type: '证件类型', id_number: '身份证号', has_children: '有无子女', qq: 'QQ', emergency_contact: '紧急联系人', emergency_phone: '紧急联系电话', interview_site: '面试站点', second_major: '第二专业', graduate_type: '应届往届', english_level: '英语等级', english_score: '英语等级成绩', thesis_title: '毕业论文题目', hobbies: '兴趣爱好', specialty: '特长', punishment: '受处分情况', academic_works: '学术专著', patents: '专利成果', law_violation: '违法违纪情况', applied_subsidiary: '是否应聘过本公司', relatives_in_company: '是否有亲友在本公司', medical_history: '手术史或重大疾病史', referral_code: '推荐码', student_id: '学号', major_rank_percent: '专业排名百分比', gpa_max: '满分平均学分绩点', weighted_score: '加权平均分', score_max: '满分', has_failed_course: '是否有挂科经历', accept_adjustment: '是否接受岗位调剂', siblings_count: '兄弟姐妹数量', score: '成绩', relation: '关系'
+    name: '姓名', gender: '性别', birth_date: '出生日期', age: '年龄', work_start_date: '参加工作时间', work_years: '工作经验', ethnicity: '民族', native_place: '籍贯', political_status: '政治面貌', marital_status: '婚姻状况', household_registration: '户口所在地', place_of_origin: '生源地', current_residence: '现居住地', mailing_address: '通信地址', phone: '联系电话', email: '邮箱', wechat: '微信', target_role: '期望职位', industry: '期望行业', city: '期望城市', salary: '期望薪资', employment_type: '工作性质', available_date: '可到岗时间', school: '学校', college: '学院', start_date: '开始时间', end_date: '结束时间', duration_years: '学制', level: '学历', admission_type: '招生类型', study_mode: '学习形式', degree_certificate: '学位证', degree_name: '学位名称', major: '专业', major_category: '专业分类', major_rank: '专业排名', gpa: '绩点/均分', research_direction: '研究方向', advisor: '导师', employer: '单位', role: '职位', organization: '组织', location: '工作地点', project_name: '项目名称', participant_count: '参与人数', date: '时间', issuer: '颁发机构', gains: '收获', self_evaluation: '自我评价', courses: '课程', duties: '工作内容', description: '描述', introduction: '项目介绍', outcomes: '项目成果', related_paper: '相关论文', category: '分类', skills: '相关技能', evidence: '应用说明', question: '题目', answer: '回答', custom_fields: '自定义字段', phone_code: '手机区号 / 类别', id_type: '证件类型', id_number: '身份证号', has_children: '有无子女', qq: 'QQ', emergency_contact: '紧急联系人', emergency_phone: '紧急联系电话', interview_site: '面试站点', second_major: '第二专业', graduate_type: '应届往届', english_level: '英语等级', english_score: '英语等级成绩', thesis_title: '毕业论文题目', hobbies: '兴趣爱好', specialty: '特长', punishment: '受处分情况', academic_works: '学术专著', patents: '专利成果', law_violation: '违法违纪情况', applied_subsidiary: '是否应聘过本公司', relatives_in_company: '是否有亲友在本公司', medical_history: '手术史或重大疾病史', referral_code: '推荐码', student_id: '学号', major_rank_percent: '专业排名百分比', gpa_max: '满分平均学分绩点', weighted_score: '加权平均分', score_max: '满分', has_failed_course: '是否有挂科经历', accept_adjustment: '是否接受岗位调剂', siblings_count: '兄弟姐妹数量', score: '成绩', relation: '关系'
   };
   // Per-section aliases for leaves whose plain name means something different in each
   // section. A "name" under 荣誉 is an award, not a person. Defining an entry here also
@@ -612,9 +611,6 @@
     })) return 'partial';
     return 'none';
   }
-  function aliasMatches(label, key, extraAliases) {
-    return labelMatchStrength(label, key, extraAliases) !== 'none';
-  }
   function getSiteKey(context) { if (context && context.siteKey) return String(context.siteKey); if (typeof location !== 'undefined' && location.origin) return location.origin; return ''; }
   function makeFingerprint(control, label) { var type = normalizeText(control && (control.type || control.tagName || 'field')) || 'field'; var stable = control && (control.name || control.id || control.getAttribute && control.getAttribute('aria-label') || label || 'field'); return type + ':' + normalizeText(stable); }
   function isSensitiveField(controlLike) { var type = normalizeText(controlLike && controlLike.type); var text = [controlLike && controlLike.label, controlLike && controlLike.name, controlLike && controlLike.id, controlLike && controlLike.placeholder].filter(Boolean).join(' '); return type === 'password' || type === 'file' || SENSITIVE_RE.test(text); }
@@ -926,11 +922,28 @@
   function expectedFieldValue(value, label) {
     return isDateComponentLabel(label) ? dateComponentValue(value, label) : String(value == null ? '' : value).trim();
   }
+  // Every option of the same group asks for the same document-wide query: scanning a 20-option
+  // radio group ran querySelectorAll 20 times over the identical document. The cache lives at
+  // factory scope (not inside choiceGroupItems, which would rebuild it per call) and is keyed by
+  // (document, type) with a short TTL; a stale entry is only a waste of a few milliseconds, never
+  // wrong data, because the caller still filters by name and container afterwards.
+  var sameTypeCache = (typeof WeakMap !== 'undefined') ? new WeakMap() : null;
+  var SAME_TYPE_TTL = 500;
+  function sameTypeControls(ownerDocument, type) {
+    var fresh = null;
+    var cached = ownerDocument && sameTypeCache ? sameTypeCache.get(ownerDocument) : null;
+    if (cached && cached.type === type && Date.now() - cached.at < SAME_TYPE_TTL) return cached.items;
+    if (ownerDocument && ownerDocument.querySelectorAll) {
+      fresh = Array.prototype.slice.call(ownerDocument.querySelectorAll('input[type="' + type + '"]')).filter(function (item) { return !item.disabled && isVisible(item); });
+    } else fresh = [];
+    if (sameTypeCache && ownerDocument) sameTypeCache.set(ownerDocument, { type: type, at: Date.now(), items: fresh });
+    return fresh;
+  }
   function choiceGroupItems(control) {
     if (!control || (control.type !== 'radio' && control.type !== 'checkbox')) return [];
     var ownerDocument = documentOf(control);
     if (!ownerDocument) return [];
-    var sameType = Array.prototype.slice.call(ownerDocument.querySelectorAll('input[type="' + control.type + '"]')).filter(function (item) { return !item.disabled && isVisible(item); });
+    var sameType = sameTypeControls(ownerDocument, control.type);
     var byName = control.name ? sameType.filter(function (item) { return item.name === control.name; }) : [];
     if (byName.length) return byName;
     // Name-less radios: every option of the same question shares one container, so read the
@@ -1128,19 +1141,25 @@
       if (!match) match = findProfileValue(matchLabel, values, used, learned);
       var currentValue = isCustomChoiceGroup(control) ? customChoiceValue(control) : isCustomSelectControl(control) ? customControlValue(control) : isEditableControl(control) ? textOf(control).trim() : control.value || '';
       var draft = mapping && findDraft(profile, siteKey, fingerprint, mapping.profile_key); var sourceValue = draft ? draft.value : match ? match.value : currentValue; var isNewField = !match; var confidence = fieldConfidence(match, mapping, label, matchLabel, learned, Boolean(mapped));
-      if (match && confidence === 'high' && !isDateComponentLabel(label)) used[match.profileKey] = true;
       var proposed = sourceValue;
       if (sourceValue) {
         if (control.tagName.toLowerCase() === 'select') {
           var dateExpected = expectedFieldValue(sourceValue, label);
-          proposed = (isDateComponentLabel(label) ? matchDateSelectOption(Array.prototype.slice.call(control.options), dateExpected) : matchSelectOption(Array.prototype.slice.call(control.options), dateExpected)) >= 0 ? dateExpected : '';
-          if (!isDateComponentLabel(label)) proposed = previewSelect(control, sourceValue) || '';
+          if (isDateComponentLabel(label)) {
+            proposed = matchDateSelectOption(Array.prototype.slice.call(control.options), dateExpected) >= 0 ? dateExpected : '';
+          } else {
+            proposed = previewSelect(control, sourceValue) || '';
+          }
         } else if (isCustomSelectControl(control) && isDateComponentLabel(label)) {
           proposed = expectedFieldValue(sourceValue, label);
         }
         else if (control.type === 'radio' || control.type === 'checkbox') proposed = previewChoice(control, sourceValue) || sourceValue;
         else if (isCustomChoiceGroup(control)) proposed = previewCustomChoice(control, sourceValue) || sourceValue;
       }
+      // Claim the value only once it is actually going to be offered on this control. Marking it
+      // before the option lookup ran would let a select that has no matching option steal the value
+      // from a second field on the same page that could genuinely take it.
+      if (match && confidence === 'high' && proposed && !isDateComponentLabel(label)) used[match.profileKey] = true;
       return { id: 'resume-field-' + index, controlType: isEditableControl(control) ? 'contenteditable' : control.tagName ? control.tagName.toLowerCase() : 'custom', label: label || '未标注字段', selectorHint: control.id ? '#' + cssEscape(control.id) : null, profileKey: match ? match.profileKey : null, confidence: confidence, currentValue: currentValue, proposedValue: proposed, isNewField: isNewField || !isUsableFieldLabel(label), fingerprint: fingerprint, siteKey: siteKey, sensitive: sensitive, remember: Boolean(mapping && mapping.confirmed), isDate: isDateField(control, label), name: control.name || '', scope: scope };
     }).filter(shouldIncludeCandidate));
   }
@@ -1429,9 +1448,30 @@
     }
     return null;
   }
+  // Calendar panels are almost always mounted into the DOM up front (display:none until opened).
+  // If no panel element exists anywhere in the page, this control cannot be a picker that
+  // commits through a calendar: dispatching an open sequence on it and polling the whole
+  // document for 600 ms would be pure wasted work on an ordinary date text box. Checking for
+  // the selector up front keeps the fast path one querySelector away. A few libraries only
+  // create the panel on first interaction, so when the pre-check finds nothing we still dispatch
+  // once and give the lazy library a short window to render before giving up. `searchRoots(control)`
+  // mirrors findDatePanel's view, so a panel portalled into the control's own document is seen.
+  function datePanelMounted(control) {
+    if (typeof document === 'undefined') return false;
+    try {
+      return searchRoots(control).some(function (root) { return root.querySelector && root.querySelector(DATE_PANEL_SELECTOR); });
+    } catch (_) {
+      return false;
+    }
+  }
   async function commitThroughDatePanel(control, expected) {
     var parts = parseDateParts(expected);
     if (!parts || !parts.day) return false;
+    if (!datePanelMounted(control)) {
+      dispatchOpenSequence(control);
+      await waitFor(function () { return datePanelMounted(control); }, 300);
+      if (!datePanelMounted(control)) return false;
+    }
     dispatchOpenSequence(control);
     var panel = await waitFor(function () { return findDatePanel(control); }, 600);
     if (!panel || !pickerHeaderMatches(panel, parts)) return false;
@@ -1652,7 +1692,7 @@
   }
   async function fillCustomSelect(control, field) {
     var expected = expectedFieldValue(field.proposedValue, field.label);
-    if (!expected) return { id: field.id, status: 'failed', reason: '模板缺少该日期的具体日值' };
+    if (!expected) return { id: field.id, status: 'failed', reason: isDateComponentLabel(field.label) ? '模板缺少该日期的具体日值' : '模板里这一项缺少可选的具体值' };
     var options = await openCustomOptions(control, expected);
     if (!options) return { id: field.id, status: 'failed', reason: '下拉选项没有出现，可能需要手动选择' };
     // Give an async menu a moment to render before settling for a list that lacks the value.
@@ -1703,7 +1743,7 @@
       var control = resolveField(field, controlMap); if (!control || (isSubmitLike(control) && !isCustomChoiceGroup(control))) { results.push({ id: field.id, status: 'skipped', reason: '控件不存在或为提交控件' }); continue; }
       if (control.tagName.toLowerCase() === 'select') {
         var expectedSelectValue = expectedFieldValue(field.proposedValue, field.label);
-        if (!expectedSelectValue) { results.push({ id: field.id, status: 'failed', reason: '模板缺少该日期的具体日值' }); continue; }
+        if (!expectedSelectValue) { results.push({ id: field.id, status: 'failed', reason: isDateComponentLabel(field.label) ? '模板缺少该日期的具体日值' : '模板里这一项缺少可选的具体值' }); continue; }
         var selectIndex = isDateComponentLabel(field.label) ? matchDateSelectOption(Array.prototype.slice.call(control.options), expectedSelectValue) : matchSelectOption(Array.prototype.slice.call(control.options), expectedSelectValue);
         if (selectIndex < 0) { results.push({ id: field.id, status: 'failed', reason: '下拉选项没有匹配项' }); continue; }
         control.selectedIndex = selectIndex; emitChange(control); results.push({ id: field.id, status: 'filled' }); continue;
@@ -1820,6 +1860,34 @@
     var pending = draftWriteChain ? draftWriteChain.then(write, write) : write();
     draftWriteChain = pending.then(function () {}, function () {});
   }
+  // Every scan winds up here (the popup asks the page to remember its mapped fields), and the
+  // content script can also be injected more than once, so the same control may see this function
+  // again with the page never having rebuilt it. Without a registry, each call would stack another
+  // input/change/click listener and another MutationObserver on the same node -- the observers
+  // live as long as the element and keep firing saving calls forever. The WeakMap keys on the
+  // control itself, so a rebuilt control starts clean and a reused one is stripped before reuse.
+  // (The registry is per content-script instance: a re-injection creates its own WeakMap, whose
+  // entry cannot see handlers this instance never installed. That leaves a narrow stacking window
+  // across an extension reload in the same tab -- the popup only re-injects when versions differ,
+  // and the page is refreshing anyway at that point. Within a given instance, the common path,
+  // repeated scans no longer stack anything.)
+  var rememberRegistry = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
+  function uninstallRemember(control) {
+    if (!rememberRegistry) return;
+    var entry = rememberRegistry.get(control);
+    if (!entry) return;
+    entry.handlers.forEach(function (handler) {
+      control.removeEventListener('input', handler, true);
+      control.removeEventListener('change', handler, true);
+      control.removeEventListener('click', handler, true);
+    });
+    if (entry.observer && entry.observer.disconnect) entry.observer.disconnect();
+    rememberRegistry.delete(control);
+  }
+  function installRememberEntry(control, handler, observer) {
+    if (!rememberRegistry) return;
+    rememberRegistry.set(control, { handlers: [handler], observer: observer });
+  }
   function rememberFields(fields, siteKey) {
     var controlMap = controlIndex();
     var safeFields = (fields || []).filter(function (field) { return field && field.remember && !field.sensitive && field.profileKey && field.fingerprint; }).map(function (field) { return { siteKey: field.siteKey || siteKey, fingerprint: field.fingerprint, profileKey: field.profileKey, selectorHint: field.selectorHint, label: field.label }; });
@@ -1832,23 +1900,25 @@
         if (timer) clearTimeout(timer);
         timer = setTimeout(function () {
           if (isSensitiveField({ type: control.type || control.tagName, label: field.label, name: control.name, id: control.id })) return;
-        var value = isCustomChoiceGroup(control) ? customChoiceValue(control) : readControlValue(control);
+          var value = isCustomChoiceGroup(control) ? customChoiceValue(control) : readControlValue(control);
           if (value && !isGenericPrompt(value)) updateLocalDraft({ site_key: field.siteKey || siteKey, fingerprint: field.fingerprint, profile_key: field.profileKey, value: value });
         }, 350);
       };
+      var observer = null;
+      uninstallRemember(control);
       control.addEventListener('input', save, true);
       control.addEventListener('change', save, true);
       if (isCustomSelectControl(control)) {
         control.addEventListener('click', save, true);
         if (typeof MutationObserver !== 'undefined') {
-          var observer = new MutationObserver(save);
+          observer = new MutationObserver(save);
           observer.observe(control, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['class', 'aria-selected', 'data-value'] });
         }
       }
+      installRememberEntry(control, save, observer);
     });
     return safeFields.length;
   }
-  var currentHighlightEl = null;
   var highlightTimer = null;
   // A document stylesheet does not cross a shadow boundary, so a control inside a web component
   // needs its own copy of the rule or the highlight is invisible on it. Frames need the same
@@ -1875,8 +1945,6 @@
         highlighted[i].classList.remove('__resume_autofill_highlight');
       }
     }
-    currentHighlightEl = null;
-    return true;
   }
   function highlight(field) {
     if (typeof document === 'undefined' || !field) return false;
@@ -1894,7 +1962,6 @@
       target = control.closest('.el-select') || control.closest('.ant-select') || control.parentElement || control;
     }
     target.classList.add('__resume_autofill_highlight');
-    currentHighlightEl = target;
     try {
       target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
     } catch (_) {
@@ -1905,5 +1972,5 @@
     }, 3000);
     return true;
   }
-  return { normalizeText: normalizeText, controlSelector: controlSelector, isRendered: isRendered, nearbyChoiceText: nearbyChoiceText, labelVariants: labelVariants, withoutLeadingQualifier: withoutLeadingQualifier, isPlaceholderValue: isPlaceholderValue, buildLearnedMap: buildLearnedMap, findLearnedValue: findLearnedValue, leafProfileKey: leafProfileKey, learnedMatch: learnedMatch, fieldConfidence: fieldConfidence, labelMatchStrength: labelMatchStrength, profileLabelStrength: profileLabelStrength, matchChoiceIndexes: matchChoiceIndexes, choiceTokens: choiceTokens, booleanChoice: booleanChoice, choiceItems: choiceItems, choiceText: choiceText, scanRoots: scanRoots, searchRoots: searchRoots, allControls: allControls, controlIndex: controlIndex, isLiveControl: isLiveControl, deriveLabel: deriveLabel, flattenProfile: flattenProfile, matchSelectOption: matchSelectOption, matchDateSelectOption: matchDateSelectOption, matchChoice: matchChoice, isSubmitLike: isSubmitLike, isSensitiveField: isSensitiveField, isGenericPrompt: isGenericPrompt, cleanFieldLabel: cleanFieldLabel, isUsableFieldLabel: isUsableFieldLabel, shouldIncludeCandidate: shouldIncludeCandidate, customControlValue: customControlValue, readControlValue: readControlValue, isScannableControl: isScannableControl, isCustomSelectControl: isCustomSelectControl, isEditableControl: isEditableControl, isTextEntryControl: isTextEntryControl, readEditableText: readEditableText, isCustomChoiceGroup: isCustomChoiceGroup, customChoiceItems: customChoiceItems, customChoiceValue: customChoiceValue, customChoiceSelected: customChoiceSelected, previewCustomChoice: previewCustomChoice, isKnownPopupRoot: isKnownPopupRoot, panelRootFor: panelRootFor, findCascadeConfirm: findCascadeConfirm, customChoiceText: customChoiceText, customChoiceState: customChoiceState, fillCustomChoice: fillCustomChoice, isClickHazard: isClickHazard, dispatchOpenSequence: dispatchOpenSequence, valueParts: valueParts, regionKey: regionKey, matchCascadeOption: matchCascadeOption, findCustomOptions: findCustomOptions, combineContextLabel: combineContextLabel, findContainerLabel: findContainerLabel, preferredContainerSelectors: preferredContainerSelectors, isNavigationOnlyLabel: isNavigationOnlyLabel, isDateComponentLabel: isDateComponentLabel, dateComponentValue: dateComponentValue, dedupeControlDescriptors: dedupeControlDescriptors, dedupeFieldDescriptors: dedupeFieldDescriptors, valueMatchesLabel: valueMatchesLabel, setNativeValue: setNativeValue, makeFingerprint: makeFingerprint, siteMappingMatches: siteMappingMatches, collectDraftValues: collectDraftValues, upsertDrafts: upsertDrafts, draftIsStored: draftIsStored, writeDraft: writeDraft, scan: scan, fill: fill, rememberFields: rememberFields, highlight: highlight, clearHighlight: clearHighlight };
+  return { version: CONTENT_VERSION, normalizeText: normalizeText, controlSelector: controlSelector, isRendered: isRendered, nearbyChoiceText: nearbyChoiceText, labelVariants: labelVariants, withoutLeadingQualifier: withoutLeadingQualifier, isPlaceholderValue: isPlaceholderValue, buildLearnedMap: buildLearnedMap, findLearnedValue: findLearnedValue, leafProfileKey: leafProfileKey, learnedMatch: learnedMatch, fieldConfidence: fieldConfidence, labelMatchStrength: labelMatchStrength, profileLabelStrength: profileLabelStrength, matchChoiceIndexes: matchChoiceIndexes, choiceTokens: choiceTokens, booleanChoice: booleanChoice, choiceItems: choiceItems, choiceText: choiceText, scanRoots: scanRoots, searchRoots: searchRoots, allControls: allControls, controlIndex: controlIndex, isLiveControl: isLiveControl, deriveLabel: deriveLabel, flattenProfile: flattenProfile, matchSelectOption: matchSelectOption, matchDateSelectOption: matchDateSelectOption, matchChoice: matchChoice, isSubmitLike: isSubmitLike, isSensitiveField: isSensitiveField, isGenericPrompt: isGenericPrompt, cleanFieldLabel: cleanFieldLabel, isUsableFieldLabel: isUsableFieldLabel, shouldIncludeCandidate: shouldIncludeCandidate, customControlValue: customControlValue, readControlValue: readControlValue, isScannableControl: isScannableControl, isCustomSelectControl: isCustomSelectControl, isEditableControl: isEditableControl, isTextEntryControl: isTextEntryControl, readEditableText: readEditableText, isCustomChoiceGroup: isCustomChoiceGroup, customChoiceItems: customChoiceItems, customChoiceValue: customChoiceValue, customChoiceSelected: customChoiceSelected, previewCustomChoice: previewCustomChoice, isKnownPopupRoot: isKnownPopupRoot, panelRootFor: panelRootFor, findCascadeConfirm: findCascadeConfirm, customChoiceText: customChoiceText, customChoiceState: customChoiceState, fillCustomChoice: fillCustomChoice, isClickHazard: isClickHazard, dispatchOpenSequence: dispatchOpenSequence, valueParts: valueParts, regionKey: regionKey, matchCascadeOption: matchCascadeOption, findCustomOptions: findCustomOptions, combineContextLabel: combineContextLabel, findContainerLabel: findContainerLabel, preferredContainerSelectors: preferredContainerSelectors, isNavigationOnlyLabel: isNavigationOnlyLabel, isDateComponentLabel: isDateComponentLabel, dateComponentValue: dateComponentValue, dedupeControlDescriptors: dedupeControlDescriptors, dedupeFieldDescriptors: dedupeFieldDescriptors, valueMatchesLabel: valueMatchesLabel, setNativeValue: setNativeValue, makeFingerprint: makeFingerprint, siteMappingMatches: siteMappingMatches, collectDraftValues: collectDraftValues, upsertDrafts: upsertDrafts, draftIsStored: draftIsStored, writeDraft: writeDraft, scan: scan, fill: fill, rememberFields: rememberFields, highlight: highlight, clearHighlight: clearHighlight };
 }));
