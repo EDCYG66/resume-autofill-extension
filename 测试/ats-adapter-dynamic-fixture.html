@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+<body>
+  <form id="ats-form" data-resume-ats class="beisen-app">
+    <section class="beisen-form-item" data-field-container>
+      <label class="beisen-label" for="ats-name">姓名</label>
+      <input id="ats-name" name="atsName" data-beisen-control>
+    </section>
+    <button type="submit">保存并继续</button>
+  </form>
+  <pre id="smoke-result"></pre>
+  <script src="../content.js"></script>
+  <script>
+    window.submitAttempts = 0;
+    document.querySelector('#ats-form').addEventListener('submit', function (event) {
+      event.preventDefault();
+      window.submitAttempts += 1;
+    });
+    var profile = {
+      basic: { name: '北森测试姓名', phone: '13800138000', email: 'beisen@example.com' },
+      intention: { target_role: '算法工程师', city: '北京' }
+    };
+    var first = ResumeContent.scan(profile, { siteKey: 'https://ats.example.test' });
+    var initialCount = first.length;
+    var initialStatus = ResumeContent.watchStatus();
+    var dynamicRoot = document.createElement('section');
+    dynamicRoot.className = 'beisen-form-item';
+    dynamicRoot.setAttribute('data-field-container', '');
+    dynamicRoot.innerHTML = '<label class="beisen-label">应聘岗位</label>' +
+      '<div class="beisen-select" role="combobox" aria-haspopup="listbox" tabindex="0" data-beisen-control>' +
+      '<span class="beisen-placeholder">请选择应聘岗位</span></div>';
+    document.querySelector('#ats-form').insertBefore(dynamicRoot, document.querySelector('#ats-form button'));
+    var popup = document.createElement('div');
+    popup.className = 'beisen-dropdown';
+    popup.setAttribute('role', 'listbox');
+    popup.hidden = true;
+    popup.innerHTML = '<div role="option">算法工程师</div><div role="option">测试工程师</div>';
+    document.body.appendChild(popup);
+    dynamicRoot.querySelector('[role="combobox"]').addEventListener('click', function () { popup.hidden = false; });
+    popup.addEventListener('click', function (event) {
+      var option = event.target.closest('[role="option"]');
+      if (!option) return;
+      dynamicRoot.querySelector('.beisen-placeholder').textContent = option.textContent;
+      popup.hidden = true;
+    });
+    setTimeout(function () {
+      var changed = ResumeContent.watchStatus();
+      var second = ResumeContent.scan(profile, { siteKey: 'https://ats.example.test' });
+      var role = second.find(function (item) { return item.label === '应聘岗位'; });
+      ResumeContent.fill(second.filter(function (item) { return item.proposedValue && !item.isNewField; })).then(function (results) {
+        var output = {
+          initialCount: initialCount,
+          initialWatchStarted: initialStatus.started,
+          dynamicWatchDirty: changed.dirty,
+          rescannedCount: second.length,
+          adapterCandidateFound: Boolean(role),
+          adapterNames: ResumeContent.getDiagnostics().adapters,
+          duplicateCount: second.filter(function (item) { return item.label === '应聘岗位'; }).length,
+          filledValue: document.querySelector('#ats-name').value,
+          roleValue: dynamicRoot.querySelector('.beisen-placeholder').textContent.trim(),
+          fillStatuses: results.map(function (item) { return item.status; }),
+          submitAttempts: window.submitAttempts
+        };
+        document.querySelector('#smoke-result').textContent = JSON.stringify(output);
+      }, function (error) {
+        document.querySelector('#smoke-result').textContent = JSON.stringify({ error: String(error), submitAttempts: window.submitAttempts });
+      });
+    }, 500);
+  </script>
+</body>
+</html>

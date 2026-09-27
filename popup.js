@@ -8,7 +8,9 @@
     candidates: [],
     activeFilter: 'all',
     activeTab: 'fill',
-    lastScanTab: null
+    lastScanTab: null,
+    lastDiagnostics: null,
+    siteKey: ''
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -78,6 +80,7 @@
         url: state.lastScanTab.url,
         siteKey: state.siteKey || '',
         activeFilter: state.activeFilter || 'all',
+        diagnostics: state.lastDiagnostics || null,
         candidates: candidates,
         savedAt: new Date().toISOString()
       }
@@ -91,7 +94,12 @@
     persistTimer = setTimeout(function () { persistTimer = null; persistLastScan(); }, 250);
   }
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'hidden') persistLastScan();
+    if (document.visibilityState === 'hidden') {
+      persistLastScan();
+      if (state.lastScanTab && chrome.tabs && chrome.tabs.sendMessage) {
+        chrome.tabs.sendMessage(state.lastScanTab.id, { type: 'watchStop' }, function () { try { void chrome.runtime.lastError; } catch (_) {} });
+      }
+    }
   });
   function restoreLastScan(tab) {
     if (!tab || !chrome.storage || !chrome.storage.local) return Promise.resolve(false);
@@ -101,6 +109,7 @@
         if (!saved || saved.url !== tab.url || !Array.isArray(saved.candidates) || !saved.candidates.length) return resolve(false);
         state.lastScanTab = { id: tab.id, url: tab.url };
         state.siteKey = saved.siteKey || '';
+        state.lastDiagnostics = saved.diagnostics || null;
         state.activeFilter = saved.activeFilter || 'all';
         state.candidates = rehydrateSensitiveValues(saved.candidates);
         $('review').hidden = false;
@@ -139,6 +148,84 @@
           if (chrome.runtime.lastError) reject(new Error('这个页面不允许插件读取')); else resolve({ version: expected });
         });
       });
+    });
+  }
+  function candidateKey(candidate) {
+    if (!candidate) return '';
+    return [candidate.fingerprint || '', candidate.scope || '', candidate.controlType || '', candidate.label || ''].join('|');
+  }
+  function mergeScanCandidates(previous, incoming) {
+    var prior = Object.create(null);
+    (previous || []).forEach(function (candidate) {
+      var key = candidateKey(candidate);
+      if (key && !prior[key]) prior[key] = candidate;
+    });
+    return (incoming || []).map(function (candidate) {
+      var old = prior[candidateKey(candidate)];
+      if (!old) {
+        candidate.selected = !candidate.sensitive && !candidate.isNewField && candidate.confidence === 'high' && Boolean(candidate.proposedValue);
+        return candidate;
+      }
+      // A dynamic rescan refreshes DOM-facing values while preserving everything the applicant
+      // changed in the popup. The edited marker is set by the input handler below and survives
+      // the local last-scan cache, so a late mutation cannot erase a hand-written answer.
+      if (old.edited) {
+        candidate.proposedValue = old.proposedValue;
+        candidate.edited = true;
+      }
+      candidate.selected = old.selected;
+      candidate.assignedKey = old.assignedKey || candidate.assignedKey || '';
+      candidate.remember = old.remember;
+      candidate.customKey = old.customKey || candidate.customKey || '';
+      candidate.customLabel = old.customLabel || candidate.customLabel || '';
+      candidate.showCustomEditor = old.showCustomEditor;
+      if (old.isNewField && old.assignedKey) {
+        candidate.isNewField = true;
+        candidate.confidence = old.confidence;
+      }
+      return candidate;
+    });
+  }
+  var scanSerial = 0;
+  var scanInFlight = null;
+  function runScan(tab, reason, preserve) {
+    if (!tab) return Promise.reject(new Error('没找到当前页面'));
+    var serial = ++scanSerial;
+    if (scanInFlight) return scanInFlight;
+    scanInFlight = ensureLatestContent(tab.id).then(function () {
+      return messageTab(tab.id, {
+        type: 'scan',
+        profile: state.profile,
+        context: { siteKey: state.siteKey, mappings: state.profile.site_mappings || [] }
+      });
+    }).then(function (response) {
+      if (serial !== scanSerial) return false;
+      var incoming = response && Array.isArray(response.candidates) ? response.candidates : [];
+      state.lastScanTab = { id: tab.id, url: tab.url };
+      state.lastDiagnostics = response && response.diagnostics || null;
+      state.candidates = preserve ? mergeScanCandidates(state.candidates, incoming) : incoming.map(function (candidate) {
+        candidate.selected = !candidate.sensitive && !candidate.isNewField && candidate.confidence === 'high' && Boolean(candidate.proposedValue);
+        return candidate;
+      });
+      $('review').hidden = false;
+      renderCandidates();
+      persistLastScan();
+      var matchedCount = state.candidates.filter(function (c) { return candidateMatchesFilter(c, 'matched'); }).length;
+      if (reason === 'dynamic') {
+        setStatus('页面表单已变化，已更新扫描结果（' + state.candidates.length + ' 处，已对上 ' + matchedCount + ' 处）。');
+      }
+      return true;
+    }).finally(function () { scanInFlight = null; });
+    return scanInFlight;
+  }
+  if (chrome.runtime && chrome.runtime.onMessage && chrome.runtime.onMessage.addListener) {
+    chrome.runtime.onMessage.addListener(function (message, sender) {
+      if (!message || message.type !== 'formChanged' || !state.lastScanTab || !sender || !sender.tab) return;
+      if (sender.tab.id !== state.lastScanTab.id) return;
+      activeTab().then(function (tab) {
+        if (!tab || tab.id !== state.lastScanTab.id || tab.url !== state.lastScanTab.url) return;
+        return runScan(tab, 'dynamic', true);
+      }).catch(function () {});
     });
   }
   function findAssignableField(profileKey) {
@@ -339,6 +426,7 @@
       input.disabled = !candidate.profileKey && !candidate.isNewField;
       input.addEventListener('input', function () {
         candidate.proposedValue = input.value;
+        candidate.edited = true;
         if (!candidate.isNewField) candidate.selected = Boolean(input.value);
         wrapper.classList.toggle('is-excluded', !candidate.selected);
         check.checked = candidate.selected;
@@ -700,33 +788,18 @@
     setStatus('正在分析当前页面表单…');
     activeTab().then(function (tab) {
       try { state.siteKey = new URL(tab.url).origin; } catch (_) { state.siteKey = ''; }
-      return ensureLatestContent(tab.id).then(function () {
-        return messageTab(tab.id, {
-          type: 'scan',
-          profile: state.profile,
-          context: { siteKey: state.siteKey, mappings: state.profile.site_mappings || [] }
-        });
-      }).then(function (response) { return { tab: tab, response: response }; });
-    }).then(function (result) {
-      var tab = result.tab;
-      var response = result.response;
-      state.lastScanTab = { id: tab.id, url: tab.url };
-      state.candidates = (response.candidates || []).map(function (candidate) {
-        candidate.selected = !candidate.sensitive && !candidate.isNewField && candidate.confidence === 'high' && Boolean(candidate.proposedValue);
-        return candidate;
+      return runScan(tab, 'manual', false).then(function () {
+        var remembered = state.candidates.filter(function (item) { return item.remember && !item.isNewField && !item.sensitive; });
+        if (remembered.length) messageTab(tab.id, { type: 'remember', fields: remembered, siteKey: state.siteKey || '' }).catch(function () {});
+        var matchedCount = state.candidates.filter(function (c) { return candidateMatchesFilter(c, 'matched'); }).length;
+        if (profileIsEmpty(state.profile)) {
+          setStatus('扫描完成。你的简历资料目前为空，请点击右上角“导入资料”或打开资料编辑器填写。', true);
+        } else {
+          var adapterNote = state.lastDiagnostics && state.lastDiagnostics.adapters && state.lastDiagnostics.adapters.length
+            ? '，结构适配：' + state.lastDiagnostics.adapters.join('、') : '';
+          setStatus('扫描完成！找到 ' + state.candidates.length + ' 处表单，已自动对上 ' + matchedCount + ' 处' + adapterNote + '。确认无误后点击“帮我填上”。');
+        }
       });
-      $('review').hidden = false;
-      renderCandidates();
-      persistLastScan();
-      var remembered = state.candidates.filter(function (item) { return item.remember && !item.isNewField && !item.sensitive; });
-      if (remembered.length) messageTab(tab.id, { type: 'remember', fields: remembered, siteKey: state.siteKey || '' }).catch(function () {});
-
-      var matchedCount = state.candidates.filter(function (c) { return candidateMatchesFilter(c, 'matched'); }).length;
-      if (profileIsEmpty(state.profile)) {
-        setStatus('扫描完成。你的简历资料目前为空，请点击右上角“导入资料”或打开资料编辑器填写。', true);
-      } else {
-        setStatus('扫描完成！找到 ' + state.candidates.length + ' 处表单，已自动对上 ' + matchedCount + ' 处。确认无误后点击“帮我填上”。');
-      }
     }).catch(function (error) {
       setStatus(error.message, true);
     }).finally(function () {
@@ -920,7 +993,17 @@
     setStatus(readyMessage);
     // Chrome closes the panel as soon as the applicant clicks the page, and reopening used to
     // start from nothing. Bring the previous scan back when the page is still the same one.
-    return activeTab().then(function (tab) { return restoreLastScan(tab); }).then(function (restored) {
+    return activeTab().then(function (tab) {
+      return restoreLastScan(tab).then(function (restored) {
+        if (!restored) return false;
+        // A page may have rendered a new section while the popup was closed. The content-side
+        // watcher keeps only a dirty bit, so reopening can reconcile the cache without guessing.
+        return messageTab(tab.id, { type: 'watchStatus' }).then(function (watch) {
+          if (watch && watch.dirty) return runScan(tab, 'dynamic', true).then(function () { return true; });
+          return true;
+        }).catch(function () { return true; });
+      });
+    }).then(function (restored) {
       if (restored) setStatus('已恢复上次的扫描结果（共 ' + state.candidates.length + ' 处）。确认后可直接点“帮我填上”。');
     }).catch(function () {});
   }).catch(function (error) {

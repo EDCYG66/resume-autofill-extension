@@ -495,10 +495,13 @@ test('offers the additional section fields to the assignment picker', () => {
   const additional = catalog.filter((g) => g.section === 'additional');
   assert.equal(additional.length, 1, 'additional should appear once in the picker');
   assert.equal(additional[0].scalar, true);
-  assert.equal(additional[0].fields.length, 12);
+  assert.equal(additional[0].fields.length, 15);
   const keys = additional[0].fields.map((field) => field[0]);
   assert.ok(keys.includes('accept_adjustment'), '是否接受岗位调剂 should be assignable');
   assert.ok(keys.includes('siblings_count'), '兄弟姐妹数量 should be assignable');
+  assert.ok(keys.includes('postgraduate_exam'), '是否考研或考博 should be assignable');
+  assert.ok(keys.includes('study_abroad'), '近期是否办理出国留学手续 should be assignable');
+  assert.ok(keys.includes('is_overseas_student'), '是否留学生 should be assignable');
 });
 
 test('offers the family section fields to the assignment picker', () => {
@@ -1126,4 +1129,128 @@ test('rememberFields strips prior listeners before rewiring a control', () => {
   assert.match(block, /removeEventListener/, 'prior handlers must be removed before reuse');
   assert.match(block, /observer\.disconnect/, 'the prior MutationObserver must be torn down');
   assert.match(block, /installRememberEntry/, 'the fresh wiring must be recorded for the next call');
+});
+
+test('matches new recruitment fields (children_count, postgraduate_exam, study_abroad, is_overseas_student, cet scores)', () => {
+  const cases = [
+    { key: 'basic.children_count', label: '子女数量：', expect: 'exact' },
+    { key: 'basic.children_count', label: '孩子数量', expect: 'exact' },
+    { key: 'additional.postgraduate_exam', label: '是否考研或考博：', expect: 'exact' },
+    { key: 'additional.study_abroad', label: '近期是否办理出国留学手续：', expect: 'exact' },
+    { key: 'additional.is_overseas_student', label: '是否留学生：', expect: 'exact' },
+    { key: 'education.1.cet4_score', label: 'CET-4分数：', expect: 'exact' },
+    { key: 'education.1.cet6_score', label: 'CET-6分数：', expect: 'exact' },
+    { key: 'education.1.college', label: '院/系/所：', expect: 'exact' },
+    { key: 'additional.relatives_in_company', label: '是否有配偶、直系血亲、三代以内旁系血亲、近姻亲关系在华能从业：', expect: 'exact' },
+    { key: 'additional.accept_adjustment', label: '是否服从调剂：', expect: 'exact' }
+  ];
+  cases.forEach(({ key, label, expect }) => {
+    const strength = Content.profileLabelStrength({ profileKey: key, label: key.split('.').pop(), value: 'x' }, label);
+    assert.equal(strength, expect, label + ' should match ' + key + ' as ' + expect);
+  });
+});
+
+test('numeric array indices like courses.4 do not match unrelated label substrings', () => {
+  const item = { profileKey: 'education.2.courses.4', value: '建筑设备', label: '课程', aliases: [] };
+  const strength = Content.profileLabelStrength(item, 'CET-4分数：');
+  assert.equal(strength, 'none', 'CET-4分数 should never match courses.4');
+});
+
+test('customControlValue reads Element Plus and Ant Design selected items', () => {
+  const elPlusSelected = {
+    querySelector: (sel) => {
+      if (sel.includes('.el-select__placeholder:not(.is-transparent)')) {
+        return { textContent: '共青团员' };
+      }
+      return null;
+    }
+  };
+  assert.equal(Content.customControlValue(elPlusSelected), '共青团员');
+
+  const elPlusPlaceholder = {
+    querySelector: (sel) => null,
+    textContent: '请选择政治面貌'
+  };
+  assert.equal(Content.customControlValue(elPlusPlaceholder), '请选择政治面貌');
+  assert.equal(Content.readControlValue(elPlusPlaceholder), '');
+});
+
+test('a negation and its base word are never treated as synonyms', () => {
+  const opt = (text) => ({ value: text, text: text });
+  // The 是/否 synonym groups (服从/不服从, 接受/不接受, 同意/不同意) share substrings across the
+  // negation. Containment matching used to answer a yes/no value with its own opposite.
+  assert.equal(Content.matchSelectOption([opt('不同意调剂'), opt('同意调剂')], '是'), 1);
+  assert.equal(Content.matchSelectOption([opt('不接受'), opt('接受')], '是'), 1);
+  assert.equal(Content.matchSelectOption([opt('同意'), opt('不同意')], '否'), 1);
+  // The wider class this belongs to: 全日制/非全日制, 有/没有.
+  assert.equal(Content.matchSelectOption([opt('非全日制')], '全日制'), -1);
+  assert.equal(Content.matchSelectOption([opt('全日制')], '非全日制'), -1);
+  assert.equal(Content.matchSelectOption([opt('没有')], '有'), -1);
+  // Matching the right option out of a full list must still work.
+  assert.equal(Content.matchSelectOption([opt('全日制'), opt('非全日制')], '非全日制'), 1);
+  assert.equal(Content.matchSelectOption([opt('接受'), opt('不接受')], '接受'), 0);
+  // Stripping a genuine qualifier is not a negation and must still match.
+  assert.equal(Content.matchSelectOption([opt('硕士及以上'), opt('本科')], '硕士'), 0);
+});
+
+test('previewChoice resolves a lone checkbox before matching its caption text', () => {
+  // previewChoice needs a live DOM for choiceGroupItems, so the node suite guards the source
+  // contract instead; chrome-smoke.ps1 covers the behaviour end to end (its 不同意调剂 checkbox
+  // starts checked and the regression left it checked when the value asked to clear it).
+  const fsRead = require('fs');
+  const pathJoin = require('path');
+  const source = fsRead.readFileSync(pathJoin.join(__dirname, '..', 'content.js'), 'utf8');
+  const start = source.indexOf('function previewChoice');
+  const end = source.indexOf('function previewSelect');
+  assert.ok(start >= 0 && end > start, 'previewChoice must exist');
+  const body = source.slice(start, end);
+  const lone = body.indexOf("control.type === 'checkbox' && group.length === 1");
+  const caption = body.indexOf('matchChoiceIndexes(items, expected)');
+  assert.ok(lone >= 0, 'the lone-checkbox boolean branch must be present');
+  assert.ok(caption > lone, 'it must resolve the boolean before matching the caption text');
+});
+
+test('structured ATS adapter is selected only by explicit DOM markers', () => {
+  const control = {
+    tagName: 'DIV',
+    getAttribute: (name) => name === 'role' ? 'combobox' : null
+  };
+  const markedRoot = {
+    querySelector: (selector) => selector.includes('[data-beisen]') ? {} : null,
+    querySelectorAll: (selector) => selector.includes('[data-beisen-control]') ? [control] : []
+  };
+  const plainRoot = {
+    querySelector: () => null,
+    querySelectorAll: () => []
+  };
+  assert.deepEqual(Content.adapterNames([markedRoot]), ['structured-ats']);
+  assert.deepEqual(Content.adapterNames([plainRoot]), []);
+});
+
+test('form watcher API is exposed and remains stopped in a non-DOM unit context', () => {
+  assert.equal(typeof Content.startFormWatch, 'function');
+  assert.equal(typeof Content.stopFormWatch, 'function');
+  assert.equal(typeof Content.watchStatus, 'function');
+  const stopped = Content.stopFormWatch();
+  assert.equal(stopped.started, false);
+  assert.equal(stopped.dirty, false);
+});
+
+test('dynamic rescan state preserves user edits and watcher wiring', () => {
+  const fsRead = require('fs');
+  const pathJoin = require('path');
+  const source = fsRead.readFileSync(pathJoin.join(__dirname, '..', 'popup.js'), 'utf8');
+  assert.match(source, /function mergeScanCandidates/);
+  assert.match(source, /candidate\.edited = true/);
+  assert.match(source, /message\.type !== 'formChanged'/);
+  assert.match(source, /watchStatus/);
+});
+
+test('does not map a job-allocation question to the target role', () => {
+  const targetRole = Content.profileLabelStrength({ profileKey: 'intention.target_role', label: '期望职位', value: '算法工程师' }, '是否愿意公司岗位调配');
+  const employmentRole = Content.profileLabelStrength({ profileKey: 'employment.1.role', label: '职位', value: '算法工程师' }, '是否愿意公司岗位调配');
+  const adjustment = Content.profileLabelStrength({ profileKey: 'additional.accept_adjustment', label: '是否接受岗位调剂', value: '是' }, '是否愿意公司岗位调配');
+  assert.equal(targetRole, 'none');
+  assert.equal(employmentRole, 'none');
+  assert.equal(adjustment, 'exact');
 });

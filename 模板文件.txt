@@ -67,6 +67,8 @@ id_type=
 id_number=
 # 有无子女：有 或 无
 has_children=
+# 子女数量：只填数字，无子女可填 0 或留空
+children_count=
 # 紧急联系人姓名
 emergency_contact=
 # 紧急联系电话
@@ -121,6 +123,12 @@ medical_history=
 accept_adjustment=
 # 兄弟姐妹数量：只填数字
 siblings_count=
+# 是否考研或考博：填 是 或 否
+postgraduate_exam=
+# 近期是否办理出国留学手续：填 是 或 否
+study_abroad=
+# 是否留学生：填 是 或 否
+is_overseas_student=
 # 校园大使推荐码 / 内推码：没有就留空
 referral_code=
 
@@ -176,6 +184,10 @@ has_failed_course=
 english_level=
 # 英语等级成绩：只填数字
 english_score=
+# CET-4分数：只填数字
+cet4_score=
+# CET-6分数：只填数字
+cet6_score=
 # 研究方向
 research_direction=
 # 导师姓名

@@ -7,9 +7,12 @@
       chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         try {
           if (message && message.type === 'ping') sendResponse({ version: api.version });
-          else if (message && message.type === 'scan') sendResponse({ candidates: api.scan(message.profile || {}, message.context || {}) });
+          else if (message && message.type === 'scan') sendResponse({ candidates: api.scan(message.profile || {}, message.context || {}), diagnostics: api.getDiagnostics() });
           else if (message && message.type === 'fill') api.fill(message.fields || []).then(function (results) { sendResponse({ results: results }); return; }, function () { sendResponse({ results: [], error: '填充失败' }); });
           else if (message && message.type === 'remember') sendResponse({ remembered: api.rememberFields(message.fields || [], message.siteKey || '') });
+          else if (message && message.type === 'watchStart') sendResponse(api.startFormWatch());
+          else if (message && message.type === 'watchStop') sendResponse(api.stopFormWatch());
+          else if (message && message.type === 'watchStatus') sendResponse(api.watchStatus());
           else if (message && message.type === 'highlight') sendResponse({ highlighted: api.highlight(message.field) });
           else if (message && message.type === 'clearHighlight') sendResponse({ cleared: api.clearHighlight() });
           else sendResponse({});
@@ -32,6 +35,51 @@
   // Per root rather than a running total: the cost that matters is one querySelectorAll('*') per
   // root, and the number of roots is already capped above.
   var MAX_SCANNED_ELEMENTS = 20000;
+  // Adapters are structural rather than domain based. A page may use a familiar component library
+  // under a different hostname, so matching on DOM markers keeps the privacy boundary and lets a
+  // newly captured ATS fixture exercise the same code path as a live site.
+  var ADAPTERS = [];
+  var lastTraversalDiagnostics = { roots: 0, frames: 0, inaccessibleFrames: 0, shadowRoots: 0, adapterErrors: [] };
+  var lastScanDiagnostics = { adapters: [], roots: 0, controls: 0, inaccessibleFrames: 0, shadowRoots: 0, adapterErrors: [] };
+  var formWatch = { started: false, dirty: false, revision: 0, eventCount: 0, capped: false, observers: [], timer: null };
+  var MAX_WATCH_EVENTS = 80;
+  var WATCH_DEBOUNCE_MS = 250;
+
+  function registerAdapter(adapter) {
+    if (!adapter || !adapter.name || typeof adapter.matches !== 'function') return false;
+    ADAPTERS.push(adapter);
+    return true;
+  }
+
+  // Beisen deployments and other ATS products are often white-labelled. The marker is deliberately
+  // explicit: a generic `.form-item` must continue through the existing path, while a captured
+  // page can opt into the adapter with a data attribute or a vendor-prefixed class.
+  registerAdapter({
+    name: 'structured-ats',
+    matches: function (root) {
+      if (!root || !root.querySelector) return false;
+      try { return Boolean(root.querySelector('[data-resume-ats], [data-beisen], [data-beisen-component], [class*="beisen-"], [class*="beisen_"]')); }
+      catch (_) { return false; }
+    },
+    augmentControls: function (root, controls) {
+      if (!root || !root.querySelectorAll) return controls || [];
+      var result = (controls || []).slice();
+      var extras;
+      try { extras = root.querySelectorAll('[data-resume-control], [data-beisen-control], [data-field-control]'); }
+      catch (_) { return result; }
+      for (var index = 0; index < extras.length; index++) {
+        var extra = extras[index];
+        // Only add controls that already expose a normal input/ARIA contract. This avoids treating
+        // a decorative data-field wrapper as a writable text box.
+        var tag = String(extra.tagName || '').toLowerCase();
+        var role = extra.getAttribute && extra.getAttribute('role');
+        if (['input', 'textarea', 'select'].indexOf(tag) >= 0 || role === 'combobox' || role === 'listbox') {
+          if (result.indexOf(extra) < 0) result.push(extra);
+        }
+      }
+      return result;
+    }
+  });
 
   function readExtensionVersion() {
     try {
@@ -61,12 +109,13 @@
     mailing_address: ['通信地址', '通讯地址', '联系地址', '邮寄地址', '收件地址', '详细地址'],
     phone: ['联系电话', '手机号', '手机号码', '电话号码', '联系手机', '本人手机', '常用电话', '手机', '移动电话', '电话', 'mobile', 'phone', 'tel', 'telephone', 'cell phone'],
     phone_code: ['手机类别', '手机区号', '电话区号', '国际区号', '国家代码', '国家区号', '区号', '国家/地区代码', '国家/地区'],
-    email: ['邮箱', '电子邮箱', '电子邮件', '邮箱地址', '电子信箱', '常用邮箱', '邮件', 'email', 'e-mail', 'mail'],
+    email: ['邮箱', '电子邮箱', '电子邮件', '邮箱地址', '电子信箱', '常用邮箱', '联系邮箱', '邮件', 'email', 'e-mail', 'mail'],
     wechat: ['微信', '微信号', '微信账号', 'wechat', 'weixin'],
     qq: ['QQ', 'QQ号', 'QQ号码', 'qq'],
     id_type: ['证件类型', '证件类别', '证件种类', '身份证件类型'],
     id_number: ['身份证号', '身份证号码', '证件号码', '证件号', '公民身份号码', '身份证件号', '证件编号', 'idcard', 'idnumber'],
     has_children: ['有无子女', '是否有子女', '子女情况', '子女状况'],
+    children_count: ['子女数量', '子女数', '孩子数量', '孩子数', '子女个数'],
     emergency_contact: ['紧急联系人', '紧急联系人姓名', '紧急联络人'],
     emergency_phone: ['紧急联系电话', '紧急联系人电话', '紧急联系方式', '紧急联络电话'],
     height: ['身高', '净身高', '身高cm', '身高(cm)', '身高（cm）', 'height'],
@@ -83,7 +132,7 @@
     // well as in their stripped form: matching removes one leading qualifier at run time, and the
     // full forms keep this table honest for whatever compares it literally.
     school: ['学校', '学校名称', '毕业院校', '毕业院校名称', '毕业学校', '就读学校', '就读院校', '就读高校', '高校名称', '院校名称', '院校', '母校', '最高学历院校'],
-    college: ['学院', '学院名称', '所在学院', '所在院系', '院系', '系别'],
+    college: ['学院', '学院名称', '所在学院', '所在院系', '院系', '系别', '院/系/所', '院/系', '院所', '院系所', '系所', '二级学院'],
     start_date: ['开始时间', '开始年月', '开始日期', '起始时间', '起始年月', '起始日期', '入学时间', '入学年月', '入职时间', 'start date'],
     end_date: ['结束时间', '结束年月', '结束日期', '截止时间', '截止日期', '毕业时间', '毕业年月', '离校时间', '离职时间', 'end date', '最高学历毕业时间'],
     duration_years: ['学制', '学制年限', '修业年限'],
@@ -99,7 +148,9 @@
     major_rank: ['专业排名', '成绩排名', '年级排名', '班级排名', '排名'],
     gpa: ['绩点', '平均绩点', '成绩绩点', '平均学分绩点', '学分绩点', '平均成绩', '均分', '平均分', 'gpa'],
     english_level: ['英语等级', '英语级别', '英语水平', '外语等级', '外语水平'],
-    english_score: ['英语等级成绩', '英语成绩', '英语分数', '四六级成绩', '外语成绩'],
+    english_score: ['英语等级成绩', '英语成绩', '英语分数', '四六级成绩', '外语成绩', '外语等级成绩'],
+    cet4_score: ['cet-4分数', 'cet4分数', '英语四级成绩', '四级成绩', '四级分数', 'cet4成绩', 'cet-4成绩', '四级分数/水平', 'cet-4', 'cet4'],
+    cet6_score: ['cet-6分数', 'cet6分数', '英语六级成绩', '六级成绩', '六级分数', 'cet6成绩', 'cet-6成绩', '六级分数/水平', 'cet-6', 'cet6'],
     research_direction: ['研究方向', '研究领域'],
     advisor: ['导师', '导师姓名', '指导教师', '指导老师'],
     thesis_title: ['毕业论文题目', '毕业论文', '论文题目', '学位论文题目', '毕业设计题目'],
@@ -127,15 +178,18 @@
     patents: ['专利成果', '发明专利', '专利情况', '专利'],
     law_violation: ['是否有触犯国家法律法规', '是否有触犯国家法律/法规', '违法犯罪记录', '是否有违法违纪', '违法违纪', '是否违法犯罪'],
     applied_subsidiary: ['是否应聘过本公司', '是否投递过本公司', '是否有应聘过', '是否有投递过', '是否应聘过', '是否投递过'],
-    relatives_in_company: ['是否有亲属在本公司', '是否有亲友在本公司', '亲戚朋友', '亲属在本公司', '是否有亲友'],
+    relatives_in_company: ['是否有亲属在本公司', '是否有亲友在本公司', '亲戚朋友', '亲属在本公司', '是否有亲友', '是否有亲属在公司', '是否有亲属在系统内', '是否有亲属在本系统', '亲属在公司情况', '亲友在公司情况', '是否有亲友在公司', '是否有亲属在公司工作', '亲属任职情况', '亲友任职情况', '直系亲属在系统内情况', '是否有亲属在集团', '亲属关系', '是否有配偶、直系血亲、三代以内旁系血亲、近姻亲关系在华能从业', '直系血亲', '三代以内旁系血亲', '近姻亲', '在华能从业', '亲属在华能从业', '系统内从业', '亲属从业'],
     medical_history: ['手术史', '重大疾病史', '重大疾病', '既往病史', '疾病史'],
     referral_code: ['校园大使推荐码', '内推推荐码', '推荐码', '内推码'],
-    accept_adjustment: ['是否接受岗位调剂', '接受岗位调剂', '是否服从调剂', '服从调剂', '是否接受调剂', '接受调剂', '是否同意调剂'],
+    accept_adjustment: ['是否接受岗位调剂', '接受岗位调剂', '是否服从调剂', '服从调剂', '是否接受调剂', '接受调剂', '是否同意调剂', '是否愿意公司岗位调配', '是否愿意岗位调配', '岗位调配'],
     siblings_count: ['兄弟姐妹数量', '兄弟姐妹数', '兄弟姐妹人数', '同胞数量'],
+    postgraduate_exam: ['是否考研或考博', '是否考研', '是否考博', '考研或考博', '是否有考研考博意向', '是否准备考研', '是否考研考博', '升学计划'],
+    study_abroad: ['近期是否办理出国留学手续', '是否办理出国留学手续', '出国留学手续', '办理出国留学手续', '是否出国留学', '是否有出国留学计划', '是否留学'],
+    is_overseas_student: ['是否留学生', '是否为留学生', '是否海外留学生', '留学生'],
     score: ['成绩', '分数', '考试成绩']
   };
   var DISPLAY_LABELS = {
-    name: '姓名', gender: '性别', birth_date: '出生日期', age: '年龄', work_start_date: '参加工作时间', work_years: '工作经验', ethnicity: '民族', native_place: '籍贯', political_status: '政治面貌', marital_status: '婚姻状况', household_registration: '户口所在地', place_of_origin: '生源地', current_residence: '现居住地', mailing_address: '通信地址', phone: '联系电话', email: '邮箱', wechat: '微信', target_role: '期望职位', industry: '期望行业', city: '期望城市', salary: '期望薪资', employment_type: '工作性质', available_date: '可到岗时间', school: '学校', college: '学院', start_date: '开始时间', end_date: '结束时间', duration_years: '学制', level: '学历', admission_type: '招生类型', study_mode: '学习形式', degree_certificate: '学位证', degree_name: '学位名称', major: '专业', major_category: '专业分类', major_rank: '专业排名', gpa: '绩点/均分', research_direction: '研究方向', advisor: '导师', employer: '单位', role: '职位', organization: '组织', location: '工作地点', project_name: '项目名称', participant_count: '参与人数', date: '时间', issuer: '颁发机构', gains: '收获', self_evaluation: '自我评价', courses: '课程', duties: '工作内容', description: '描述', introduction: '项目介绍', outcomes: '项目成果', related_paper: '相关论文', category: '分类', skills: '相关技能', evidence: '应用说明', question: '题目', answer: '回答', custom_fields: '自定义字段', phone_code: '手机区号 / 类别', id_type: '证件类型', id_number: '身份证号', has_children: '有无子女', qq: 'QQ', emergency_contact: '紧急联系人', emergency_phone: '紧急联系电话', interview_site: '面试站点', second_major: '第二专业', graduate_type: '应届往届', english_level: '英语等级', english_score: '英语等级成绩', thesis_title: '毕业论文题目', hobbies: '兴趣爱好', specialty: '特长', punishment: '受处分情况', academic_works: '学术专著', patents: '专利成果', law_violation: '违法违纪情况', applied_subsidiary: '是否应聘过本公司', relatives_in_company: '是否有亲友在本公司', medical_history: '手术史或重大疾病史', referral_code: '推荐码', student_id: '学号', major_rank_percent: '专业排名百分比', gpa_max: '满分平均学分绩点', weighted_score: '加权平均分', score_max: '满分', has_failed_course: '是否有挂科经历', accept_adjustment: '是否接受岗位调剂', siblings_count: '兄弟姐妹数量', score: '成绩', relation: '关系'
+    name: '姓名', gender: '性别', birth_date: '出生日期', age: '年龄', work_start_date: '参加工作时间', work_years: '工作经验', ethnicity: '民族', native_place: '籍贯', political_status: '政治面貌', marital_status: '婚姻状况', household_registration: '户口所在地', place_of_origin: '生源地', current_residence: '现居住地', mailing_address: '通信地址', phone: '联系电话', email: '邮箱', wechat: '微信', target_role: '期望职位', industry: '期望行业', city: '期望城市', salary: '期望薪资', employment_type: '工作性质', available_date: '可到岗时间', school: '学校', college: '学院', start_date: '开始时间', end_date: '结束时间', duration_years: '学制', level: '学历', admission_type: '招生类型', study_mode: '学习形式', degree_certificate: '学位证', degree_name: '学位名称', major: '专业', major_category: '专业分类', major_rank: '专业排名', gpa: '绩点/均分', research_direction: '研究方向', advisor: '导师', employer: '单位', role: '职位', organization: '组织', location: '工作地点', project_name: '项目名称', participant_count: '参与人数', date: '时间', issuer: '颁发机构', gains: '收获', self_evaluation: '自我评价', courses: '课程', duties: '工作内容', description: '描述', introduction: '项目介绍', outcomes: '项目成果', related_paper: '相关论文', category: '分类', skills: '相关技能', evidence: '应用说明', question: '题目', answer: '回答', custom_fields: '自定义字段', phone_code: '手机区号 / 类别', id_type: '证件类型', id_number: '身份证号', has_children: '有无子女', children_count: '子女数量', qq: 'QQ', emergency_contact: '紧急联系人', emergency_phone: '紧急联系电话', interview_site: '面试站点', second_major: '第二专业', graduate_type: '应届往届', english_level: '英语等级', english_score: '英语等级成绩', cet4_score: 'CET-4分数', cet6_score: 'CET-6分数', thesis_title: '毕业论文题目', hobbies: '兴趣爱好', specialty: '特长', punishment: '受处分情况', academic_works: '学术专著', patents: '专利成果', law_violation: '违法违纪情况', applied_subsidiary: '是否应聘过本公司', relatives_in_company: '是否有亲友在本公司', medical_history: '手术史或重大疾病史', referral_code: '推荐码', student_id: '学号', major_rank_percent: '专业排名百分比', gpa_max: '满分平均学分绩点', weighted_score: '加权平均分', score_max: '满分', has_failed_course: '是否有挂科经历', accept_adjustment: '是否接受岗位调剂', siblings_count: '兄弟姐妹数量', postgraduate_exam: '是否考研或考博', study_abroad: '近期是否办理出国留学手续', is_overseas_student: '是否留学生', score: '成绩', relation: '关系'
   };
   // Per-section aliases for leaves whose plain name means something different in each
   // section. A "name" under 荣誉 is an award, not a person. Defining an entry here also
@@ -216,7 +270,7 @@
   function customControlValue(control) {
     if (!control) return '';
     if (control.querySelector) {
-      var selectors = ['.ant-select-selection-selected-value', '.el-select__tags-text', '.el-input__inner', '[aria-selected="true"]'];
+      var selectors = ['.ant-select-selection-selected-value', '.ant-select-selection-item', '.el-select__tags-text', '.el-tag__content', '.el-select__placeholder:not(.is-transparent)', '.el-select__selected-item:not(.el-select__input-wrapper):not(.is-transparent)', '.el-input__inner', '[aria-selected="true"]'];
       for (var i = 0; i < selectors.length; i++) {
         var selected = control.querySelector(selectors[i]);
         var selectedText = textOf(selected).trim();
@@ -229,7 +283,10 @@
     if (!control) return '';
     var visible = customControlValue(control);
     if (visible && !isGenericPrompt(visible)) return visible;
-    return String(control.value || visible || '').trim();
+    if (control.value != null && String(control.value).trim() && !isGenericPrompt(control.value)) {
+      return String(control.value).trim();
+    }
+    return '';
   }
   // Select components name their root after the library, and each library lays its own popup
   // out differently. Listing the roots here is what gets a site-specific dropdown scanned;
@@ -247,6 +304,15 @@
     var type = normalizeText(element.type);
     if (['hidden', 'submit', 'reset', 'button', 'image', 'file'].indexOf(type) >= 0) return false;
     if (element.getAttribute && element.getAttribute('aria-hidden') === 'true') return false;
+    if (element.tagName && element.tagName.toLowerCase() === 'input') {
+      var selectAncestor = element.closest && element.closest('.el-select, .ant-select, .arco-select, .t-select');
+      if (selectAncestor && selectAncestor !== element && isCustomSelectControl(selectAncestor)) {
+        var cls = String(element.className || '');
+        if (cls.indexOf('select__input') >= 0 || cls.indexOf('search-input') >= 0 || cls.indexOf('selection-search') >= 0) {
+          return false;
+        }
+      }
+    }
     // A custom-styled radio or checkbox is a transparent input layered over a drawn circle.
     // Opacity must not hide it from the scan, or a whole 性别 group never shows up.
     if (!isRendered(element) && !(isChoiceControl(element) && isRendered(element, { ignoreOpacity: true }))) return false;
@@ -272,7 +338,7 @@
     var text = cleanFieldLabel(value);
     return ['应聘渠道', '个人基本信息', '求职意向', '教育经历', '英语能力', '其他外语能力', '计算机技能', '专业技能', '实习经历', '获奖或社团职务', '专利', '自我评价'].indexOf(text) >= 0;
   }
-  function preferredContainerSelectors() { return ['.resume-operation-wrap .form-cell', '.resume-operation-wrap .form-cell-right', '.ant-form-item', '.el-form-item', '.form-item--phoenix', '.form-item']; }
+  function preferredContainerSelectors() { return ['.resume-operation-wrap .form-cell', '.resume-operation-wrap .form-cell-right', '.ant-form-item', '.el-form-item', '.form-item--phoenix', '.beisen-form-item', '[data-field-container]', '.form-item']; }
   function nearestResumeContainer(element) {
     if (!element) return null;
     var selectors = preferredContainerSelectors();
@@ -417,6 +483,7 @@
     return hosts;
   }
   function scanRoots() {
+    lastTraversalDiagnostics = { roots: 0, frames: 0, inaccessibleFrames: 0, shadowRoots: 0, adapterErrors: [] };
     var roots = [];
     if (typeof document === 'undefined' || !document.querySelectorAll) return roots;
     roots.push(document);
@@ -434,7 +501,7 @@
         var frame = frames[frameIndex];
         if (!isFrameVisible(frame)) continue;
         var inner = null;
-        try { inner = frame.contentDocument; } catch (_) { inner = null; }
+        try { inner = frame.contentDocument; } catch (_) { inner = null; lastTraversalDiagnostics.inaccessibleFrames += 1; }
         if (inner && inner.querySelectorAll && inner.body && roots.indexOf(inner) < 0) { roots.push(inner); frameCount += 1; }
       }
       var hosts = shadowHosts(root);
@@ -446,6 +513,7 @@
         if (carriesControl) {
           if (controlRoots >= MAX_SHADOW_ROOTS) continue;
           controlRoots += 1;
+          lastTraversalDiagnostics.shadowRoots += 1;
         } else {
           if (emptyRoots >= MAX_EMPTY_SHADOW_ROOTS) continue;
           emptyRoots += 1;
@@ -453,7 +521,42 @@
         roots.push(shadow);
       }
     }
+    lastTraversalDiagnostics.roots = roots.length;
+    lastTraversalDiagnostics.frames = frameCount;
     return roots;
+  }
+  function adapterNames(roots) {
+    var names = [];
+    (roots || []).forEach(function (root) {
+      ADAPTERS.forEach(function (adapter) {
+        try {
+          if (adapter.matches(root) && names.indexOf(adapter.name) < 0) names.push(adapter.name);
+        } catch (error) {
+          if (lastTraversalDiagnostics.adapterErrors.indexOf(adapter.name) < 0) lastTraversalDiagnostics.adapterErrors.push(adapter.name);
+        }
+      });
+    });
+    return names;
+  }
+  function applyAdapters(root, controls) {
+    var result = (controls || []).slice();
+    ADAPTERS.forEach(function (adapter) {
+      var active = false;
+      try { active = adapter.matches(root); } catch (error) {
+        if (lastTraversalDiagnostics.adapterErrors.indexOf(adapter.name) < 0) lastTraversalDiagnostics.adapterErrors.push(adapter.name);
+        return;
+      }
+      if (!active || typeof adapter.augmentControls !== 'function') return;
+      try {
+        var augmented = adapter.augmentControls(root, result);
+        if (Array.isArray(augmented)) {
+          augmented.forEach(function (control) { if (result.indexOf(control) < 0) result.push(control); });
+        }
+      } catch (error) {
+        if (lastTraversalDiagnostics.adapterErrors.indexOf(adapter.name) < 0) lastTraversalDiagnostics.adapterErrors.push(adapter.name);
+      }
+    });
+    return result;
   }
   function queryControls(root) {
     if (!root || !root.querySelectorAll) return [];
@@ -464,12 +567,12 @@
     Array.prototype.slice.call(root.querySelectorAll(CUSTOM_CHOICE_GROUP_SELECTOR)).forEach(function (group) {
       if (isCustomChoiceGroup(group)) controls.push(group);
     });
-    return controls;
+    return applyAdapters(root, controls);
   }
   function controlSelector() { return CONTROL_SELECTOR; }
-  function allControls() {
+  function allControls(roots) {
     var controls = [];
-    scanRoots().forEach(function (root) { controls = controls.concat(queryControls(root)); });
+    (roots || scanRoots()).forEach(function (root) { controls = controls.concat(queryControls(root)); });
     return controls;
   }
   // True when the control is actually rendered. An ancestor with display:none hides it, but
@@ -548,7 +651,13 @@
     return cleanFieldLabel(combineContextLabel('', ancestorContextLabels(element)));
   }
   function fieldAliases(key) {
-    var short = String(key || '').split('.').pop().replace(/\[\d+\]$/, '').replace(/^\d+_/, '');
+    var parts = String(key || '').split('.');
+    var last = parts.pop();
+    if (/^\d+$/.test(last) && parts.length > 0) {
+      last = parts.pop();
+    }
+    var short = String(last || '').replace(/\[\d+\]$/, '').replace(/^\d+_/, '');
+    if (/^\d+$/.test(short)) return [];
     return (ALIASES[short] || [DISPLAY_LABELS[short] || short]).map(normalizeText);
   }
   // Forms often annotate a label with its unit or a hint in brackets: 净身高(cm), 体重（kg）,
@@ -630,6 +739,10 @@
     var profileKey = String(item.profileKey || '');
     var sectionKey = profileKey.replace(/\.\d+\./, '.');
     var normalizedLabel = normalizeText(label);
+    // A question about accepting reassignment contains the generic word 岗位, but it is not the
+    // applicant's target role. Do not let the broad target_role alias steal it when the dedicated
+    // accept_adjustment field is empty or absent.
+    if (/(岗位调配|岗位调剂|调配岗位|调剂岗位)/.test(normalizedLabel) && profileKey !== 'additional.accept_adjustment') return 'none';
     var category = normalizeText(item.categoryValue || '');
     if (sectionKey.indexOf('skills.') === 0) {
       if (/(英语|外语|语言)/.test(normalizedLabel) && category && !/(英语|外语|语言)/.test(category)) return 'none';
@@ -642,8 +755,10 @@
     // key, which would otherwise let a project title match a 姓名 field.
     var contextAliases = CONTEXT_LABELS[sectionKey];
     var scoped = Boolean(contextAliases);
+    var leafKey = profileKey.split('.').pop();
+    var leafLabel = /^\d+$/.test(leafKey) ? '' : (DISPLAY_LABELS[leafKey] || '');
     var aliases = (item.aliases || []).concat(
-      [item.label || '', scoped ? '' : (DISPLAY_LABELS[profileKey.split('.').pop()] || '')],
+      [item.label || '', scoped ? '' : leafLabel],
       contextAliases || []
     );
     return labelMatchStrength(label, scoped ? '' : item.profileKey, aliases);
@@ -735,8 +850,10 @@
   function optionTokens(value) {
     return stripOptionSuffix(value).replace(/[（(][^（）()]*[)）]/g, '').split(/[\s·・,，、_\-/]+/).filter(function (token) { return token && token.length >= 2 && OPTION_STOPWORDS.indexOf(token) < 0; });
   }
+  // Token coverage is containment-based, so it needs the same polarity guard as the other
+  // containment tests: 全日制 must not be covered by 非全日制, 接受 not by 不接受.
   function tokensCover(allTokens, neededTokens) {
-    return neededTokens.every(function (needed) { return allTokens.some(function (available) { return available.indexOf(needed) >= 0 || needed.indexOf(available) >= 0; }); });
+    return neededTokens.every(function (needed) { return allTokens.some(function (available) { return samePolarity(available, needed) && (available.indexOf(needed) >= 0 || needed.indexOf(available) >= 0); }); });
   }
   var ENUM_SYNONYMS = [
     // 英语等级 (CET/TEM/IELTS/TOEFL)
@@ -769,6 +886,8 @@
     // 是非 / 布尔选项
     ['无', '否', '没有', 'false', 'no', '0'],
     ['有', '是', 'true', 'yes', '1'],
+    ['服从', '是', '接受', '同意', '愿意'],
+    ['不服从', '否', '不接受', '不同意', '不愿意'],
     // 学习形式 / 培养方式 / 招聘类型
     ['全日制', '统招全日制', '普通全日制'],
     ['非全日制', '在职'],
@@ -788,8 +907,11 @@
       for (var j = 0; j < group.length; j++) {
         var syn = normalizeText(group[j]);
         if (t === syn) { hit = true; break; }
-        if (syn.length >= 2 && t.indexOf(syn) >= 0) { hit = true; break; }
-        if (t.length >= 2 && syn.indexOf(t) >= 0) { hit = true; break; }
+        // The containment tests must not link a word to its own negation: 非全日制 contains 全日制,
+        // 没有 contains 有, 不接受 contains 接受. Collecting those would make the opposite option a
+        // synonym of the value being matched.
+        if (syn.length >= 2 && samePolarity(syn, t) && t.indexOf(syn) >= 0) { hit = true; break; }
+        if (t.length >= 2 && samePolarity(syn, t) && syn.indexOf(t) >= 0) { hit = true; break; }
         if ((syn === '男' && (t === '男' || t === '男性' || t === 'male' || t === 'm')) ||
             (syn === '女' && (t === '女' || t === '女性' || t === 'female' || t === 'f')) ||
             (syn === '无' && (t === '无' || t === '否' || t === '没有')) ||
@@ -808,10 +930,18 @@
     return result;
   }
 
+  // 同意 and 不同意 are opposites that share a substring, as are 接受/不接受, 服从/不服从 and
+  // 愿意/不愿意. Treating one as contained in the other would answer a yes/no question with its
+  // own negation, so a containment hit only counts when both sides carry the same polarity:
+  // either both open with a negation, or neither does.
+  var NEGATION_PREFIX_RE = /^(不|没|无|非|未)/;
+  function samePolarity(a, b) {
+    return NEGATION_PREFIX_RE.test(String(a == null ? '' : a)) === NEGATION_PREFIX_RE.test(String(b == null ? '' : b));
+  }
   function matchSelectOption(options, expected) {
     var target = normalizeText(expected); if (!target) return -1;
     for (var i = 0; i < options.length; i++) if (normalizeText(textOf(options[i])) === target || normalizeText(options[i].value) === target) return i;
-    for (var j = 0; j < options.length; j++) { var candidate = normalizeText(textOf(options[j])); if (candidate && (candidate.indexOf(target) >= 0 || target.indexOf(candidate) >= 0)) return j; }
+    for (var j = 0; j < options.length; j++) { var candidate = normalizeText(textOf(options[j])); if (candidate && samePolarity(candidate, target) && (candidate.indexOf(target) >= 0 || target.indexOf(candidate) >= 0)) return j; }
     var targetStripped = stripOptionSuffix(target); if (targetStripped && targetStripped !== target) {
       for (var k = 0; k < options.length; k++) { var stripped = stripOptionSuffix(textOf(options[k])); if (stripped && (stripped === targetStripped || stripped.indexOf(targetStripped) >= 0 || targetStripped.indexOf(stripped) >= 0)) return k; }
     }
@@ -823,7 +953,7 @@
         for (var si = 0; si < synonyms.length; si++) {
           var syn = synonyms[si];
           if (optText === syn || optVal === syn) return s;
-          if (optText && (optText.indexOf(syn) >= 0 || syn.indexOf(optText) >= 0)) return s;
+          if (optText && samePolarity(optText, syn) && (optText.indexOf(syn) >= 0 || syn.indexOf(optText) >= 0)) return s;
         }
       }
     }
@@ -1119,6 +1249,11 @@
   function previewChoice(control, expected) {
     var group = choiceGroupItems(control);
     if (!group.length) return null;
+    // A lone checkbox is a yes/no switch: the 是/否 value IS the answer and must not be read back
+    // as one of the box's own words. 否 against a caption 不同意调剂 matches through the negation
+    // synonyms below, which turned a value that asked to clear the box into one that ticked it.
+    // The fill path already treats a single checkbox as boolean first; scanning has to agree.
+    if (control.type === 'checkbox' && group.length === 1 && booleanChoice(expected) !== null) return String(expected == null ? '' : expected).trim();
     var items = choiceItems(group);
     var indexes = matchChoiceIndexes(items, expected);
     if (indexes.length) return indexes.map(function (index) { return items[index].text || items[index].value; }).join('、');
@@ -1132,9 +1267,11 @@
   function scan(profile, context) {
     if (typeof document === 'undefined') return [];
     context = context || {}; var siteKey = getSiteKey(context); var values = flattenProfile(profile); var used = Object.create(null); var mappings = context.mappings || profile.site_mappings || []; var learned = buildLearnedMap(profile && profile.label_mappings);
-    var controls = allControls().filter(isScannableControl);
+    var roots = scanRoots();
+    var activeAdapters = adapterNames(roots);
+    var controls = allControls(roots).filter(isScannableControl);
     controls = dedupeControlDescriptors(controls);
-    return dedupeFieldDescriptors(controls.filter(function (control) { return isCustomChoiceGroup(control) || !isSubmitLike(control); }).map(function (control, index) {
+    var candidates = dedupeFieldDescriptors(controls.filter(function (control) { return isCustomChoiceGroup(control) || !isSubmitLike(control); }).map(function (control, index) {
       var label = cleanFieldLabel(deriveLabel(control)); var fingerprint = makeFingerprint(control, label); var sensitive = isSensitiveField({ type: control.type || control.tagName, label: label, name: control.name, id: control.id, placeholder: control.placeholder }); var scope = controlScope(control);
       var mapping = mappings.find(function (item) { return siteMappingMatches(item, siteKey, fingerprint, label); }); var mapped = mapping ? values.find(function (item) { return item.profileKey === mapping.profile_key; }) : null; var match = mapped;
       var matchLabel = [label, control.name || '', control.id || '', control.getAttribute && control.getAttribute('aria-label') || ''].filter(Boolean).join(' '); if (!match) match = findLearnedValue(label, values, used, learned);
@@ -1162,6 +1299,98 @@
       if (match && confidence === 'high' && proposed && !isDateComponentLabel(label)) used[match.profileKey] = true;
       return { id: 'resume-field-' + index, controlType: isEditableControl(control) ? 'contenteditable' : control.tagName ? control.tagName.toLowerCase() : 'custom', label: label || '未标注字段', selectorHint: control.id ? '#' + cssEscape(control.id) : null, profileKey: match ? match.profileKey : null, confidence: confidence, currentValue: currentValue, proposedValue: proposed, isNewField: isNewField || !isUsableFieldLabel(label), fingerprint: fingerprint, siteKey: siteKey, sensitive: sensitive, remember: Boolean(mapping && mapping.confirmed), isDate: isDateField(control, label), name: control.name || '', scope: scope };
     }).filter(shouldIncludeCandidate));
+    lastScanDiagnostics = {
+      adapters: activeAdapters,
+      roots: roots.length,
+      controls: controls.length,
+      inaccessibleFrames: lastTraversalDiagnostics.inaccessibleFrames,
+      shadowRoots: lastTraversalDiagnostics.shadowRoots,
+      adapterErrors: (lastTraversalDiagnostics.adapterErrors || []).slice()
+    };
+    startFormWatch(roots);
+    return candidates;
+  }
+  function watchTarget(root) {
+    if (!root) return null;
+    if (root.nodeType === 9) return root.documentElement || root.body || null;
+    return root;
+  }
+  function isExtensionMutation(node) {
+    if (!node || node.nodeType !== 1) return false;
+    var id = String(node.id || '');
+    var className = String(node.className || '');
+    return id === '__resume_autofill_style' || className.indexOf('__resume_autofill_highlight') >= 0;
+  }
+  function hasRelevantMutation(records) {
+    return (records || []).some(function (record) {
+      if (!record || record.type !== 'childList') return false;
+      var nodes = Array.prototype.slice.call(record.addedNodes || []).concat(Array.prototype.slice.call(record.removedNodes || []));
+      return nodes.some(function (node) { return !isExtensionMutation(node); });
+    });
+  }
+  function watchStatus() {
+    return {
+      started: Boolean(formWatch.started),
+      dirty: Boolean(formWatch.dirty),
+      revision: formWatch.revision,
+      eventCount: formWatch.eventCount,
+      capped: Boolean(formWatch.capped),
+      diagnostics: Object.assign({}, lastScanDiagnostics)
+    };
+  }
+  function stopFormWatch() {
+    if (formWatch.timer) { clearTimeout(formWatch.timer); formWatch.timer = null; }
+    (formWatch.observers || []).forEach(function (observer) {
+      try { observer.disconnect(); } catch (_) {}
+    });
+    formWatch.observers = [];
+    formWatch.started = false;
+    return watchStatus();
+  }
+  function notifyFormChanged() {
+    if (typeof chrome === 'undefined' || !chrome.runtime || typeof chrome.runtime.sendMessage !== 'function') return;
+    try {
+      chrome.runtime.sendMessage({ type: 'formChanged', revision: formWatch.revision }, function () {
+        // A popup is optional. Ignore the expected "no receiver" runtime error when it is closed.
+        try { void chrome.runtime.lastError; } catch (_) {}
+      });
+    } catch (_) {}
+  }
+  function scheduleFormChanged() {
+    if (formWatch.timer || formWatch.capped) return;
+    formWatch.timer = setTimeout(function () {
+      formWatch.timer = null;
+      notifyFormChanged();
+    }, WATCH_DEBOUNCE_MS);
+  }
+  function markFormChanged(records) {
+    if (!hasRelevantMutation(records)) return;
+    formWatch.dirty = true;
+    formWatch.revision += 1;
+    formWatch.eventCount += 1;
+    if (formWatch.eventCount >= MAX_WATCH_EVENTS) formWatch.capped = true;
+    scheduleFormChanged();
+  }
+  function startFormWatch(roots) {
+    stopFormWatch();
+    if (typeof MutationObserver === 'undefined' || typeof document === 'undefined') return watchStatus();
+    formWatch.started = true;
+    formWatch.dirty = false;
+    formWatch.eventCount = 0;
+    formWatch.capped = false;
+    var targets = [];
+    (roots || scanRoots()).forEach(function (root) {
+      var target = watchTarget(root);
+      if (target && targets.indexOf(target) < 0) targets.push(target);
+    });
+    targets.forEach(function (target) {
+      try {
+        var observer = new MutationObserver(markFormChanged);
+        observer.observe(target, { childList: true, subtree: true });
+        formWatch.observers.push(observer);
+      } catch (_) {}
+    });
+    return watchStatus();
   }
   function isLiveControl(control) { return Boolean(control) && (typeof control.isConnected === 'undefined' || control.isConnected); }
   function controlIndex() {
@@ -1282,10 +1511,20 @@
   }
   function referencedPopupIds(control) {
     var ids = [];
-    ['aria-controls', 'aria-owns', 'aria-describedby'].forEach(function (attribute) {
-      var value = control && control.getAttribute && control.getAttribute(attribute);
-      if (!value) return;
-      String(value).split(/\s+/).forEach(function (id) { if (id && ids.indexOf(id) < 0) ids.push(id); });
+    var targets = [control];
+    var owner = control && control.closest && control.closest('.ant-select, .el-select, .ivu-select, .n-select, .arco-select, .t-select, .semi-select, .phoenix-select');
+    var root = owner || control;
+    if (root && root.querySelectorAll) {
+      Array.prototype.slice.call(root.querySelectorAll('[aria-controls], [aria-owns], [aria-describedby]')).forEach(function (el) {
+        if (targets.indexOf(el) < 0) targets.push(el);
+      });
+    }
+    targets.forEach(function (target) {
+      ['aria-controls', 'aria-owns', 'aria-describedby'].forEach(function (attribute) {
+        var value = target && target.getAttribute && target.getAttribute(attribute);
+        if (!value) return;
+        String(value).split(/\s+/).forEach(function (id) { if (id && ids.indexOf(id) < 0) ids.push(id); });
+      });
     });
     return ids;
   }
@@ -1500,9 +1739,13 @@
   // selection row, others on the wrapper. Trying the control, its owner, its inner input and
   // its parent in turn covers all four layouts.
   function openTargets(control) {
-    var targets = [control];
+    var targets = [];
     var owner = control.closest && control.closest('.ant-select, .el-select, .ivu-select, .n-select, .arco-select, .t-select, .semi-select, .phoenix-select, [role="combobox"], [aria-haspopup]');
-    if (owner && owner !== control) targets.push(owner);
+    var root = owner || control;
+    var wrapper = root.querySelector && root.querySelector('.el-select__wrapper, .el-tooltip__trigger, [class*="select__wrapper"], [class*="select-trigger"]');
+    if (wrapper) targets.push(wrapper);
+    if (targets.indexOf(control) < 0) targets.push(control);
+    if (owner && targets.indexOf(owner) < 0) targets.push(owner);
     var inner = control.querySelector && control.querySelector('input, [class*="selection"], [class*="selector"], [class*="select-view"], [class*="select-input"]');
     if (inner && targets.indexOf(inner) < 0) targets.push(inner);
     // The parent is the last resort, so it is also the one most likely to be a link or a button:
@@ -1972,5 +2215,5 @@
     }, 3000);
     return true;
   }
-  return { version: CONTENT_VERSION, normalizeText: normalizeText, controlSelector: controlSelector, isRendered: isRendered, nearbyChoiceText: nearbyChoiceText, labelVariants: labelVariants, withoutLeadingQualifier: withoutLeadingQualifier, isPlaceholderValue: isPlaceholderValue, buildLearnedMap: buildLearnedMap, findLearnedValue: findLearnedValue, leafProfileKey: leafProfileKey, learnedMatch: learnedMatch, fieldConfidence: fieldConfidence, labelMatchStrength: labelMatchStrength, profileLabelStrength: profileLabelStrength, matchChoiceIndexes: matchChoiceIndexes, choiceTokens: choiceTokens, booleanChoice: booleanChoice, choiceItems: choiceItems, choiceText: choiceText, scanRoots: scanRoots, searchRoots: searchRoots, allControls: allControls, controlIndex: controlIndex, isLiveControl: isLiveControl, deriveLabel: deriveLabel, flattenProfile: flattenProfile, matchSelectOption: matchSelectOption, matchDateSelectOption: matchDateSelectOption, matchChoice: matchChoice, isSubmitLike: isSubmitLike, isSensitiveField: isSensitiveField, isGenericPrompt: isGenericPrompt, cleanFieldLabel: cleanFieldLabel, isUsableFieldLabel: isUsableFieldLabel, shouldIncludeCandidate: shouldIncludeCandidate, customControlValue: customControlValue, readControlValue: readControlValue, isScannableControl: isScannableControl, isCustomSelectControl: isCustomSelectControl, isEditableControl: isEditableControl, isTextEntryControl: isTextEntryControl, readEditableText: readEditableText, isCustomChoiceGroup: isCustomChoiceGroup, customChoiceItems: customChoiceItems, customChoiceValue: customChoiceValue, customChoiceSelected: customChoiceSelected, previewCustomChoice: previewCustomChoice, isKnownPopupRoot: isKnownPopupRoot, panelRootFor: panelRootFor, findCascadeConfirm: findCascadeConfirm, customChoiceText: customChoiceText, customChoiceState: customChoiceState, fillCustomChoice: fillCustomChoice, isClickHazard: isClickHazard, dispatchOpenSequence: dispatchOpenSequence, valueParts: valueParts, regionKey: regionKey, matchCascadeOption: matchCascadeOption, findCustomOptions: findCustomOptions, combineContextLabel: combineContextLabel, findContainerLabel: findContainerLabel, preferredContainerSelectors: preferredContainerSelectors, isNavigationOnlyLabel: isNavigationOnlyLabel, isDateComponentLabel: isDateComponentLabel, dateComponentValue: dateComponentValue, dedupeControlDescriptors: dedupeControlDescriptors, dedupeFieldDescriptors: dedupeFieldDescriptors, valueMatchesLabel: valueMatchesLabel, setNativeValue: setNativeValue, makeFingerprint: makeFingerprint, siteMappingMatches: siteMappingMatches, collectDraftValues: collectDraftValues, upsertDrafts: upsertDrafts, draftIsStored: draftIsStored, writeDraft: writeDraft, scan: scan, fill: fill, rememberFields: rememberFields, highlight: highlight, clearHighlight: clearHighlight };
+  return { version: CONTENT_VERSION, normalizeText: normalizeText, controlSelector: controlSelector, isRendered: isRendered, nearbyChoiceText: nearbyChoiceText, labelVariants: labelVariants, withoutLeadingQualifier: withoutLeadingQualifier, isPlaceholderValue: isPlaceholderValue, buildLearnedMap: buildLearnedMap, findLearnedValue: findLearnedValue, leafProfileKey: leafProfileKey, learnedMatch: learnedMatch, fieldConfidence: fieldConfidence, labelMatchStrength: labelMatchStrength, profileLabelStrength: profileLabelStrength, matchChoiceIndexes: matchChoiceIndexes, choiceTokens: choiceTokens, booleanChoice: booleanChoice, choiceItems: choiceItems, choiceText: choiceText, scanRoots: scanRoots, searchRoots: searchRoots, allControls: allControls, adapterNames: adapterNames, registerAdapter: registerAdapter, controlIndex: controlIndex, isLiveControl: isLiveControl, deriveLabel: deriveLabel, flattenProfile: flattenProfile, matchSelectOption: matchSelectOption, matchDateSelectOption: matchDateSelectOption, matchChoice: matchChoice, isSubmitLike: isSubmitLike, isSensitiveField: isSensitiveField, isGenericPrompt: isGenericPrompt, cleanFieldLabel: cleanFieldLabel, isUsableFieldLabel: isUsableFieldLabel, shouldIncludeCandidate: shouldIncludeCandidate, customControlValue: customControlValue, readControlValue: readControlValue, isScannableControl: isScannableControl, isCustomSelectControl: isCustomSelectControl, isEditableControl: isEditableControl, isTextEntryControl: isTextEntryControl, readEditableText: readEditableText, isCustomChoiceGroup: isCustomChoiceGroup, customChoiceItems: customChoiceItems, customChoiceValue: customChoiceValue, customChoiceSelected: customChoiceSelected, previewCustomChoice: previewCustomChoice, isKnownPopupRoot: isKnownPopupRoot, panelRootFor: panelRootFor, findCascadeConfirm: findCascadeConfirm, customChoiceText: customChoiceText, customChoiceState: customChoiceState, fillCustomChoice: fillCustomChoice, isClickHazard: isClickHazard, dispatchOpenSequence: dispatchOpenSequence, valueParts: valueParts, regionKey: regionKey, matchCascadeOption: matchCascadeOption, findCustomOptions: findCustomOptions, combineContextLabel: combineContextLabel, findContainerLabel: findContainerLabel, preferredContainerSelectors: preferredContainerSelectors, isNavigationOnlyLabel: isNavigationOnlyLabel, isDateComponentLabel: isDateComponentLabel, dateComponentValue: dateComponentValue, dedupeControlDescriptors: dedupeControlDescriptors, dedupeFieldDescriptors: dedupeFieldDescriptors, valueMatchesLabel: valueMatchesLabel, setNativeValue: setNativeValue, makeFingerprint: makeFingerprint, siteMappingMatches: siteMappingMatches, collectDraftValues: collectDraftValues, upsertDrafts: upsertDrafts, draftIsStored: draftIsStored, writeDraft: writeDraft, scan: scan, fill: fill, rememberFields: rememberFields, startFormWatch: startFormWatch, stopFormWatch: stopFormWatch, watchStatus: watchStatus, getDiagnostics: function () { return Object.assign({}, lastScanDiagnostics); }, highlight: highlight, clearHighlight: clearHighlight };
 }));
