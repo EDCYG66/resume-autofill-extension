@@ -5,7 +5,7 @@
 一个 Chrome 扩展（Manifest V3）。资料只存在你这台电脑的浏览器里：不联网、不上传、不需要账号。
 它**只改字段的值**——不会替你点提交、保存、下一步，也不会替你上传任何东西。
 
-**当前版本 `0.3.7`。** 每个版本改了什么见 [CHANGELOG.md](CHANGELOG.md)。
+**当前版本 `0.3.8`。** 每个版本改了什么见 [CHANGELOG.md](CHANGELOG.md)。
 
 <img src="docs/popup-review.png" alt="弹窗：扫描之后逐项确认要填的字段" width="420">
 
@@ -298,6 +298,9 @@ updated_at=2026-09-11T08:00:00.000Z
   「确定」只会点弹出面板里的那一个，不会点到页面自己的「保存」按钮。
 - **多段记录**：教育经历、实习经历、项目经历这类一页重复好几段的表格，每一段各填各的值（同一栏目名重复
   出现也会分别识别，不会把第二段并进第一段）。
+- **前程无忧 eHire 表单**：支持 `dt/dd` 标签、编号教育字段、jQuery 学校/专业自动补全以及 My97 只读日期框。
+  “毕业学校2”等字段使用第二条教育资料；“最高学历”这一组使用第一条，请把最高学历放在资料第一条。
+  课程列表合并为多行内容。学校或专业不在页面字典里时，需要在网页选择“其他”后填写，不会只改显示文字就报告成功。
 
 ### 网站
 
@@ -431,11 +434,13 @@ personal-values.local.txt  反向隐私扫描的对照词表（已被 git 忽略
 需要 Node.js；冒烟测试还需要一个 Chromium 浏览器（Chrome / Edge / Brave 都行）。在本目录执行：
 
 ```powershell
-node --test 测试/*.test.js
+node --test 测试/content-helpers.test.js 测试/profile-parser.test.js 测试/shared.test.js
 .\测试\verify-extension.ps1
 .\测试\chrome-smoke.ps1
 .\测试\appform-smoke.ps1
 .\测试\dynamic-smoke.ps1
+.\测试\ats-adapter-dynamic-smoke.ps1
+.\测试\ehire-smoke.ps1
 .\测试\frame-smoke.ps1
 .\测试\shadow-smoke.ps1
 .\测试\phoenix-smoke.ps1
@@ -447,12 +452,21 @@ node --test 测试/*.test.js
 .\测试\pack-smoke.ps1
 ```
 
-- `node --test` 跑三个文件、134 个用例：`content-helpers.test.js`（匹配与写入的纯函数）、
+- `node --test` 跑三个文件、148 个用例：`content-helpers.test.js`（匹配与写入的纯函数）、
   `profile-parser.test.js`（模板解析与序列化）、`shared.test.js`（三方合并、存储错误处理与两页共用的源码约定）。
 - 各 `*-smoke.ps1` 只使用 `测试/` 下的合成夹具，不读取真实简历。`shadow-smoke` 覆盖 open shadow root、
   嵌套 shadow root 和 contenteditable；`phoenix-smoke` 覆盖无名标签版面下的下拉、纯 div 单选组和两级级联；
   `repeat-record-smoke` 覆盖**同栏目措辞重复出现的记录段**（两行「开始时间」各自填自己的值）、现值里带
   「上传/确认」字样的栏目，以及「自己起个名」指派之后真的能填上。
+- `ehire-smoke.ps1` 默认使用脱敏夹具，验证两条教育记录共 12 个字段，包含自动补全的显示文字、原始选项编码和修改事件。
+  可指定本地保存页面及组件资源目录复测（原文件只读、原始业务脚本不执行、网页请求与提交被阻止）：
+
+  ```powershell
+  .\测试\ehire-smoke.ps1 -SnapshotPath 'C:\路径\简历录入.html'
+  .\测试\ehire-smoke.ps1 -SnapshotPath 'C:\路径\简历录入.html' -WidgetAssetsPath 'C:\路径\简历录入_files'
+  ```
+
+  这是离线字段识别和 DOM 回读验证，网站服务端的保存、校验仍需在实际投递页面手动确认。
 - `verify-extension.ps1` 检查清单、权限、图标尺寸、固定 key、空白模板是否真的空白、zip 里有没有混进不该
   有的东西，并反向确认仓库里没有出现真实个人信息。
 - `pack-smoke.ps1` 是唯一验证「交付格式」的测试：它重新打包、按用户的方式解压，再把解压出的文件夹真正

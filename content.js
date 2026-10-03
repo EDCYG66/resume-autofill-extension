@@ -80,6 +80,10 @@
       return result;
     }
   });
+  registerAdapter({
+    name: 'ehire-combobox',
+    matches: function (root) { return Boolean(root && root.querySelector && root.querySelector('dl dd .custom-combobox-input')); }
+  });
 
   function readExtensionVersion() {
     try {
@@ -195,6 +199,7 @@
   // section. A "name" under 荣誉 is an award, not a person. Defining an entry here also
   // scopes that leaf: it stops inheriting the generic aliases of its leaf key.
   var CONTEXT_LABELS = {
+    'education.courses': ['主修课程', '课程', '所学课程'],
     'skills.name': ['技能名称', '证书名称', '英语证书名称', '技能证书', '语言名称'],
     'skills.category': ['技能分类', '语言类别', '证书种类', '语言类型'],
     'skills.score': ['成绩', '证书成绩', '考试成绩'],
@@ -298,6 +303,61 @@
     var popup = normalizeText(element.ariaHaspopup || element['aria-haspopup'] || (element.getAttribute && element.getAttribute('aria-haspopup')));
     var className = String(element.className || '').toLowerCase();
     return role === 'combobox' || role === 'listbox' || popup === 'listbox' || CUSTOM_SELECT_CLASS_RE.test(className);
+  }
+  function isLinkedComboboxInput(control) {
+    return Boolean(control && /(^|\s)custom-combobox-input(\s|$)/.test(String(control.className || '')));
+  }
+  function linkedNativeSelect(control) {
+    if (!isLinkedComboboxInput(control) || !control.closest) return null;
+    var wrapper = control.closest('.custom-combobox');
+    var select = wrapper && wrapper.previousElementSibling;
+    // jQuery's combobox puts its generated wrapper immediately after the original select.
+    // Do not borrow a different field's select by searching an entire form or record.
+    return select && String(select.tagName).toLowerCase() === 'select' && !select.disabled ? select : null;
+  }
+  function controlIdentity(control) { return linkedNativeSelect(control) || control; }
+  function definitionField(control) {
+    var dd = control && control.closest && control.closest('dd');
+    if (!dd || !dd.parentElement || String(dd.parentElement.tagName).toLowerCase() !== 'dl') return null;
+    var dt = dd.previousElementSibling;
+    while (dt && String(dt.tagName).toLowerCase() !== 'dt') dt = dt.previousElementSibling;
+    var label = cleanFieldLabel(textOf(dt));
+    return isUsableFieldLabel(label) ? { container: dd, label: label } : null;
+  }
+  function definitionEducationSlot(control) {
+    var field = definitionField(control);
+    if (!field) return null;
+    var numbered = field.label.match(/^(.*?)([1-9]\d?)$/);
+    var label = numbered ? numbered[1].trim() : field.label;
+    var record = numbered ? Number(numbered[2]) : label === '其他学历' ? 2 : 1;
+    var keys = { '最高学历': 'level', '学历': 'level', '其他学历': 'level', '毕业时间': 'end_date',
+      '毕业学校': 'school', '学校名称': 'school', '专业': 'major', '专业名称': 'major',
+      '学习成绩排名': 'major_rank', '专业排名': 'major_rank', '主修课程': 'courses' };
+    if (label === '其他学校' || label === '其他专业') {
+      return { profileKey: 'education.' + record + '.' + (label === '其他学校' ? 'school' : 'major'), label: label === '其他学校' ? '学校' : '专业', supplement: true };
+    }
+    if (label === '担任职务' && field.container.closest('.ci') && field.container.closest('.ci').querySelector('select[id^="cc_Degree_"]')) {
+      return { profileKey: 'campus_roles.' + record + '.role', label: '担任职务', confirm: true };
+    }
+    return keys[label] ? { profileKey: 'education.' + record + '.' + keys[label], label: ({ level: '学历', major_rank: '专业排名', courses: '主修课程' })[keys[label]] || label } : null;
+  }
+  function supplementIsEnabled(control, slot) {
+    if (!slot || !slot.supplement) return true;
+    var field = definitionField(control);
+    var previous = field && field.container.parentElement.previousElementSibling;
+    // The "其他" text box follows its dictionary field. Only use it once the applicant selected
+    // Other on that field; never borrow the next education record's unused school/major.
+    while (previous && String(previous.tagName).toLowerCase() === 'dl') {
+      var select = previous.querySelector('select');
+      if (select) {
+        var primarySlot = definitionEducationSlot(select);
+        if (!primarySlot || primarySlot.profileKey !== slot.profileKey || primarySlot.supplement) return false;
+        var option = select.options[select.selectedIndex];
+        return Boolean(option && /^(其他|其它|other)$/i.test(textOf(option).trim()));
+      }
+      previous = previous.previousElementSibling;
+    }
+    return false;
   }
   function isScannableControl(element) {
     if (!element || element.disabled || element.hidden) return false;
@@ -413,7 +473,8 @@
   // form-item wrapper is its own scope. Only dedupeFieldDescriptors reads this.
   function controlScope(control) {
     if (!control) return '';
-    return scopeKey(nearestResumeContainer(control) || control);
+    var definition = definitionField(control);
+    return scopeKey(definition ? definition.container : nearestResumeContainer(control) || control);
   }
   // Collapses descriptors that describe the *same* visible field, which is what happens when one
   // column is drawn twice (a native control plus the component that decorates it). Wording alone
@@ -619,6 +680,8 @@
   }
   function deriveLabel(element) {
     if (!element) return '';
+    var definition = definitionField(element);
+    if (definition) return definition.label;
     var container = nearestResumeContainer(element);
     if (container) {
       var containerLabel = findContainerLabel({
@@ -721,7 +784,7 @@
     return 'none';
   }
   function getSiteKey(context) { if (context && context.siteKey) return String(context.siteKey); if (typeof location !== 'undefined' && location.origin) return location.origin; return ''; }
-  function makeFingerprint(control, label) { var type = normalizeText(control && (control.type || control.tagName || 'field')) || 'field'; var stable = control && (control.name || control.id || control.getAttribute && control.getAttribute('aria-label') || label || 'field'); return type + ':' + normalizeText(stable); }
+  function makeFingerprint(control, label) { control = controlIdentity(control); var type = normalizeText(control && (control.type || control.tagName || 'field')) || 'field'; var stable = control && (control.name || control.id || control.getAttribute && control.getAttribute('aria-label') || label || 'field'); return type + ':' + normalizeText(stable); }
   function isSensitiveField(controlLike) { var type = normalizeText(controlLike && controlLike.type); var text = [controlLike && controlLike.label, controlLike && controlLike.name, controlLike && controlLike.id, controlLike && controlLike.placeholder].filter(Boolean).join(' '); return type === 'password' || type === 'file' || SENSITIVE_RE.test(text); }
   function siteMappingMatches(mapping, siteKey, fingerprint, label) { if (!mapping || String(mapping.site_key || '') !== String(siteKey || '')) return false; if (mapping.fingerprint && String(mapping.fingerprint) === String(fingerprint)) return true; if (mapping.selector_hint && String(mapping.selector_hint) === String(fingerprint)) return true; return Boolean(mapping.label && normalizeText(mapping.label) === normalizeText(label)); }
   // 父亲姓名, 母亲联系电话, 亲属工作单位 …: an attribute of somebody else. Answering those with
@@ -816,6 +879,9 @@
     var values = [];
     function add(prefix, value, label, aliases) {
       if (value == null || value === '' || isPlaceholderValue(value)) return;
+      if (/^education\.\d+\.courses$/.test(prefix) && Array.isArray(value)) {
+        return add(prefix, value.filter(function (course) { return typeof course === 'string' && course.trim() && !isPlaceholderValue(course); }).join('\n'), label, aliases);
+      }
       if (Array.isArray(value)) return value.forEach(function (item, index) { add(prefix + '.' + (index + 1), item, label, aliases); });
       if (typeof value === 'object') return Object.keys(value).forEach(function (key) { if (key === 'extras' || key === 'site_mappings' || key === 'site_drafts' || key === 'label_mappings') return; var contextKey = prefix.split('.')[0] + '.' + key; var display = (CONTEXT_LABELS[contextKey] || [])[0] || DISPLAY_LABELS[key] || (key === 'courses' ? '课程' : key); add(prefix ? prefix + '.' + key : key, value[key], display, aliases); });
       values.push({ profileKey: prefix, value: String(value), label: label || prefix, aliases: aliases || [] });
@@ -1274,13 +1340,22 @@
     var candidates = dedupeFieldDescriptors(controls.filter(function (control) { return isCustomChoiceGroup(control) || !isSubmitLike(control); }).map(function (control, index) {
       var label = cleanFieldLabel(deriveLabel(control)); var fingerprint = makeFingerprint(control, label); var sensitive = isSensitiveField({ type: control.type || control.tagName, label: label, name: control.name, id: control.id, placeholder: control.placeholder }); var scope = controlScope(control);
       var mapping = mappings.find(function (item) { return siteMappingMatches(item, siteKey, fingerprint, label); }); var mapped = mapping ? values.find(function (item) { return item.profileKey === mapping.profile_key; }) : null; var match = mapped;
-      var matchLabel = [label, control.name || '', control.id || '', control.getAttribute && control.getAttribute('aria-label') || ''].filter(Boolean).join(' '); if (!match) match = findLearnedValue(label, values, used, learned);
-      if (!match) match = findProfileValue(matchLabel, values, used, learned);
+      var slot = definitionEducationSlot(control);
+      var matchLabel = slot ? slot.label : [label, control.name || '', control.id || '', control.getAttribute && control.getAttribute('aria-label') || ''].filter(Boolean).join(' ');
+      if (!match && slot && supplementIsEnabled(control, slot)) match = values.find(function (item) { return item.profileKey === slot.profileKey; }) || null;
+      // A numbered education column is bound to that record even when its value is missing.
+      // Falling back to the global unused-value pool can put a job date into a graduation field.
+      if (!match && !slot) match = findLearnedValue(label, values, used, learned);
+      if (!match && !slot) match = findProfileValue(matchLabel, values, used, learned);
       var currentValue = isCustomChoiceGroup(control) ? customChoiceValue(control) : isCustomSelectControl(control) ? customControlValue(control) : isEditableControl(control) ? textOf(control).trim() : control.value || '';
       var draft = mapping && findDraft(profile, siteKey, fingerprint, mapping.profile_key); var sourceValue = draft ? draft.value : match ? match.value : currentValue; var isNewField = !match; var confidence = fieldConfidence(match, mapping, label, matchLabel, learned, Boolean(mapped));
+      if (match && slot && slot.confirm && !mapped) confidence = 'medium';
       var proposed = sourceValue;
+      var linked = linkedNativeSelect(control);
       if (sourceValue) {
-        if (control.tagName.toLowerCase() === 'select') {
+        if (linked) {
+          proposed = previewSelect(linked, sourceValue) || '';
+        } else if (control.tagName.toLowerCase() === 'select') {
           var dateExpected = expectedFieldValue(sourceValue, label);
           if (isDateComponentLabel(label)) {
             proposed = matchDateSelectOption(Array.prototype.slice.call(control.options), dateExpected) >= 0 ? dateExpected : '';
@@ -1297,7 +1372,8 @@
       // before the option lookup ran would let a select that has no matching option steal the value
       // from a second field on the same page that could genuinely take it.
       if (match && confidence === 'high' && proposed && !isDateComponentLabel(label)) used[match.profileKey] = true;
-      return { id: 'resume-field-' + index, controlType: isEditableControl(control) ? 'contenteditable' : control.tagName ? control.tagName.toLowerCase() : 'custom', label: label || '未标注字段', selectorHint: control.id ? '#' + cssEscape(control.id) : null, profileKey: match ? match.profileKey : null, confidence: confidence, currentValue: currentValue, proposedValue: proposed, isNewField: isNewField || !isUsableFieldLabel(label), fingerprint: fingerprint, siteKey: siteKey, sensitive: sensitive, remember: Boolean(mapping && mapping.confirmed), isDate: isDateField(control, label), name: control.name || '', scope: scope };
+      var identity = controlIdentity(control);
+      return { id: 'resume-field-' + index, controlType: isEditableControl(control) ? 'contenteditable' : control.tagName ? control.tagName.toLowerCase() : 'custom', label: label || '未标注字段', selectorHint: identity.id ? '#' + cssEscape(identity.id) : null, profileKey: match ? match.profileKey : null, confidence: confidence, currentValue: currentValue, proposedValue: proposed, isNewField: isNewField || !isUsableFieldLabel(label), fingerprint: fingerprint, siteKey: siteKey, sensitive: sensitive, remember: Boolean(mapping && mapping.confirmed), isDate: isDateField(control, label), name: identity.name || '', scope: scope };
     }).filter(shouldIncludeCandidate));
     lastScanDiagnostics = {
       adapters: activeAdapters,
@@ -1401,7 +1477,8 @@
       if (!index.byFingerprint[fingerprint]) index.byFingerprint[fingerprint] = control;
       var normalizedLabel = normalizeText(label);
       if (normalizedLabel && !index.byLabel[normalizedLabel]) index.byLabel[normalizedLabel] = control;
-      if (control.id) { var selector = '#' + cssEscape(control.id); if (!index.bySelector[selector]) index.bySelector[selector] = control; }
+      var identity = controlIdentity(control);
+      if (identity.id) { var selector = '#' + cssEscape(identity.id); if (!index.bySelector[selector]) index.bySelector[selector] = control; }
     });
     return index;
   }
@@ -1984,6 +2061,23 @@
       // makes a field fillable is a resolved profile key plus a value, not the absence of the flag.
       if (!field || !field.proposedValue || isPlaceholderValue(field.proposedValue) || field.confidence === 'none' || (field.isNewField && !field.profileKey)) { results.push({ id: field && field.id, status: 'skipped', reason: '没有可用的已确认资料' }); continue; }
       var control = resolveField(field, controlMap); if (!control || (isSubmitLike(control) && !isCustomChoiceGroup(control))) { results.push({ id: field.id, status: 'skipped', reason: '控件不存在或为提交控件' }); continue; }
+      if (isLinkedComboboxInput(control)) {
+        var backing = linkedNativeSelect(control);
+        if (!backing) { results.push({ id: field.id, status: 'failed', reason: '自动补全框缺少对应的下拉字段' }); continue; }
+        var linkedIndex = matchSelectOption(Array.prototype.slice.call(backing.options), field.proposedValue);
+        if (linkedIndex < 0) { results.push({ id: field.id, status: 'failed', reason: '学校/专业字典没有匹配项，请在页面选择其他并填写' }); continue; }
+        var linkedOption = backing.options[linkedIndex];
+        var linkedText = textOf(linkedOption);
+        backing.selectedIndex = linkedIndex;
+        emitChange(backing);
+        setNativeValue(control, linkedText);
+        // Blur validation can clear an unrecognised display string. Read both contracts after
+        // the page has processed its handlers before saying the component accepted the option.
+        await new Promise(function (resolve) { setTimeout(resolve, 100); });
+        var committed = backing.value === linkedOption.value && String(control.value).trim() === linkedText.trim();
+        results.push({ id: field.id, status: committed ? 'filled' : 'failed', reason: committed ? undefined : '自动补全框显示值与实际选项未同步' });
+        continue;
+      }
       if (control.tagName.toLowerCase() === 'select') {
         var expectedSelectValue = expectedFieldValue(field.proposedValue, field.label);
         if (!expectedSelectValue) { results.push({ id: field.id, status: 'failed', reason: isDateComponentLabel(field.label) ? '模板缺少该日期的具体日值' : '模板里这一项缺少可选的具体值' }); continue; }
@@ -2016,6 +2110,17 @@
       }
       if (isCustomSelectControl(control)) {
         results.push(await fillCustomSelect(control, field));
+        continue;
+      }
+      // eHire/My97 date fields use readonly to force calendar interaction, but store the date in
+      // this submitted input itself (coltype=3, editstyle=3, checktype=5). Keep this exception narrow.
+      if (control.readOnly && definitionField(control) && control.getAttribute('coltype') === '3' && control.getAttribute('editstyle') === '3' && control.getAttribute('checktype') === '5' && isDateField(control, field.label)) {
+        var parts = parseDateParts(field.proposedValue);
+        if (!parts) { results.push({ id: field.id, status: 'failed', reason: '日期格式应为 YYYY-MM 或 YYYY-MM-DD' }); continue; }
+        var dateValue = parts.year + '-' + parts.month + (parts.day ? '-' + parts.day : '');
+        setNativeValue(control, dateValue);
+        await new Promise(function (resolve) { setTimeout(resolve, 100); });
+        results.push({ id: field.id, status: control.value === dateValue ? 'filled' : 'failed', reason: control.value === dateValue ? undefined : '日期输入框没有接受该日期' });
         continue;
       }
       // Plain text is the common case, but a site-specific dropdown is often a readonly or

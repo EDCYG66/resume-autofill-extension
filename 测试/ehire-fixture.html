@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>eHire definition list regression</title></head><body>
+<!-- Reproduces the dt/dd and hidden-select combobox structure observed in the Fao capture.
+     All applicant values and options below are synthetic test data. -->
+<form><div class="ci">
+<dl><dt>最高学历<span class="must"> *</span></dt><dd><select id="cc_Degree_1_1"><option value="">--请选择--</option><option value="6">本科</option><option value="7">硕士</option></select><label></label></dd></dl>
+<dl><dt>毕业时间<span class="must"> *</span></dt><dd><input id="cc_GradDate_3_1" readonly coltype="3" editstyle="3" checktype="5"><label></label></dd></dl>
+<dl><dt>毕业学校<span class="must"> *</span></dt><dd><select id="cc_School_1_1" style="display:none"><option value="">--请选择--</option><option value="S_01004">北京大学</option><option value="S_01010">北京工业大学</option><option value="other">其他</option></select><span class="custom-combobox"><input class="custom-combobox-input"></span><label></label></dd></dl>
+<dl><dt>其他学校</dt><dd><input id="other-school"></dd></dl>
+<dl><dt>专业<span class="must"> *</span></dt><dd><select id="cc_Major_1_1" style="display:none"><option value="">--请选择--</option><option value="0129">人工智能</option><option value="0107">电子信息科学与技术</option></select><span class="custom-combobox"><input class="custom-combobox-input"></span></dd></dl>
+<dl><dt>学习成绩排名</dt><dd><select id="cc_Score_1_1"><option value="">--请选择--</option><option value="1">前5%</option><option value="2">前20%</option></select></dd></dl>
+<dl><dt>主修课程</dt><dd><textarea id="cc_Course_6_1"></textarea></dd></dl>
+<dl><dt>其他学历</dt><dd><select id="cc_CCA1_1_1"><option value="">--请选择--</option><option value="6">本科</option><option value="7">硕士</option></select></dd></dl>
+<dl><dt>毕业时间2</dt><dd><input id="cc_CCC1_3_1" readonly coltype="3" editstyle="3" checktype="5"></dd></dl>
+<dl><dt>毕业学校2</dt><dd><select id="cc_CCA2_1_1" style="display:none"><option value="">--请选择--</option><option value="S_01004">北京大学</option><option value="S_01010">北京工业大学</option></select><span class="custom-combobox"><input class="custom-combobox-input"></span></dd></dl>
+<dl><dt>专业2</dt><dd><select id="cc_CCA4_1_1" style="display:none"><option value="">--请选择--</option><option value="0129">人工智能</option><option value="0107">电子信息科学与技术</option></select><span class="custom-combobox"><input class="custom-combobox-input"></span></dd></dl>
+<dl><dt>学习成绩排名2</dt><dd><select id="cc_CCA14_1_1"><option value="">--请选择--</option><option value="1">前5%</option><option value="2">前20%</option></select></dd></dl>
+<dl><dt>主修课程2</dt><dd><textarea id="cc_CCF1_6_1"></textarea></dd></dl>
+<dl><dt>毕业学校3</dt><dd><input id="missing-third-record"></dd></dl>
+<dl><dt>供应商内部编号</dt><dd><input id="unrecognised-field"></dd></dl>
+<dl><dt>担任职务</dt><dd><input id="education-role"></dd></dl>
+<button type="submit">保存并下一步</button>
+</div></form>
+<script>
+// Mirrors the combobox's invalid-value reset and a model that observes native select changes.
+window.selectCommits = {};
+document.querySelectorAll('.custom-combobox-input').forEach(function (input) {
+  var select = input.parentElement.previousElementSibling;
+  select.addEventListener('change', function () { window.selectCommits[select.id] = select.value; });
+  input.addEventListener('blur', function () {
+    if (!Array.from(select.options).some(function (option) { return option.selected && option.text === input.value; })) {
+      input.value = ''; select.value = '';
+    }
+  });
+});
+</script>
+</body></html>

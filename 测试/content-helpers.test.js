@@ -1254,3 +1254,23 @@ test('does not map a job-allocation question to the target role', () => {
   assert.equal(employmentRole, 'none');
   assert.equal(adjustment, 'exact');
 });
+
+test('offers a whole education course list as one textarea value per record', () => {
+  const values = Content.flattenProfile({ education: [{ courses: ['算法', '控制'] }, { courses: ['电路', '信号'] }] });
+  assert.deepEqual(values.map((item) => [item.profileKey, item.value]), [
+    ['education.1.courses', '算法\n控制'], ['education.2.courses', '电路\n信号']
+  ]);
+  assert.equal(Content.profileLabelStrength(values[0], '主修课程'), 'exact');
+});
+
+test('drops blank and unfinished entries from a combined course list', () => {
+  const values = Content.flattenProfile({ education: [{ courses: ['', '待补充', '控制', '请输入'] }] });
+  assert.equal(values.length, 1);
+  assert.equal(values[0].value, '控制');
+  assert.deepEqual(Content.flattenProfile({ education: [{ courses: ['待填写', ''] }] }), []);
+});
+
+test('keeps an education course list away from unrelated numeric field names', () => {
+  const values = Content.flattenProfile({ education: [{ courses: ['控制', '信号'] }] });
+  assert.equal(Content.profileLabelStrength(values[0], 'CET-4分数'), 'none');
+});
