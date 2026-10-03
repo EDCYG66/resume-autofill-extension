@@ -31,7 +31,7 @@
     ['self_evaluation', '自我评价'], ['application_answers', '网申问答'], ['custom_fields', '我加的项']
   ];
   var scalarFields = {
-    basic: [['name', '姓名'], ['gender', '性别'], ['birth_date', '出生日期', 'date'], ['age', '年龄'], ['work_start_date', '参加工作时间'], ['work_years', '工作经验'], ['ethnicity', '民族'], ['native_place', '籍贯'], ['political_status', '政治面貌'], ['marital_status', '婚姻状况'], ['household_registration', '户口所在地'], ['place_of_origin', '生源地'], ['current_residence', '现居住地'], ['mailing_address', '通信地址', 'wide'], ['phone', '联系电话'], ['phone_code', '手机区号 / 类别（如 +86 / 中国大陆）'], ['email', '邮箱'], ['wechat', '微信'], ['qq', 'QQ'], ['id_type', '证件类型'], ['id_number', '身份证号'], ['has_children', '有无子女'], ['children_count', '子女数量'], ['emergency_contact', '紧急联系人'], ['emergency_phone', '紧急联系电话'], ['height', '身高（cm，只填数字）'], ['weight', '体重（kg，只填数字）']],
+    basic: [['name', '姓名'], ['gender', '性别'], ['birth_date', '出生日期', 'date'], ['nationality', '国籍/地区'], ['age', '年龄'], ['work_start_date', '参加工作时间'], ['work_years', '工作经验'], ['ethnicity', '民族'], ['native_place', '籍贯'], ['political_status', '政治面貌'], ['marital_status', '婚姻状况'], ['household_registration', '户口所在地'], ['place_of_origin', '生源地'], ['current_residence', '现居住地'], ['mailing_address', '通信地址', 'wide'], ['phone', '联系电话'], ['phone_code', '手机区号 / 类别（如 +86 / 中国大陆）'], ['email', '邮箱'], ['wechat', '微信'], ['qq', 'QQ'], ['id_type', '证件类型'], ['id_number', '身份证号'], ['has_children', '有无子女'], ['children_count', '子女数量'], ['emergency_contact', '紧急联系人'], ['emergency_phone', '紧急联系电话'], ['height', '身高（cm，只填数字）'], ['weight', '体重（kg，只填数字）']],
     intention: [['target_role', '期望职位'], ['industry', '期望行业', 'wide'], ['city', '期望城市'], ['salary', '期望薪资'], ['employment_type', '工作性质'], ['interview_site', '面试站点'], ['available_date', '可到岗时间']],
     additional: [['hobbies', '兴趣爱好', 'wide'], ['specialty', '特长', 'wide'], ['punishment', '受处分情况', 'wide'], ['academic_works', '学术专著', 'wide'], ['patents', '专利成果', 'wide'], ['law_violation', '违法违纪情况'], ['applied_subsidiary', '是否应聘过本公司'], ['relatives_in_company', '是否有亲友在本公司'], ['medical_history', '手术史或重大疾病史', 'wide'], ['referral_code', '推荐码'], ['accept_adjustment', '是否接受岗位调剂'], ['siblings_count', '兄弟姐妹数量'], ['postgraduate_exam', '是否考研或考博'], ['study_abroad', '近期是否办理出国留学手续'], ['is_overseas_student', '是否留学生']]
   };
@@ -43,7 +43,7 @@
     activities: [['name', '活动名称'], ['start_date', '开始时间', 'period'], ['end_date', '结束时间', 'period'], ['role', '身份/角色'], ['organization', '组织'], ['description', '活动描述', 'full']],
     campus_roles: [['organization', '组织/学校'], ['role', '职务'], ['start_date', '开始时间', 'period'], ['end_date', '结束时间', 'period'], ['gains', '任职收获', 'full']],
     skills: [['category', '分类'], ['name', '技能名称'], ['level', '熟练程度'], ['score', '成绩'], ['evidence', '应用说明', 'wide']],
-    family: [['relation', '关系'], ['name', '姓名'], ['employer', '工作单位'], ['role', '职务'], ['phone', '联系电话']],
+    family: [['relation', '关系'], ['name', '姓名'], ['birth_date', '出生日期'], ['employer', '工作单位'], ['role', '职务'], ['phone', '联系电话']],
     application_answers: [['question', '题目', 'wide'], ['answer', '回答', 'full']],
     custom_fields: [['key', '名称'], ['label', '显示标签'], ['category', '分类'], ['value', '默认内容', 'wide'], ['field_type', '类型']]
   };

@@ -5,7 +5,7 @@
 一个 Chrome 扩展（Manifest V3）。资料只存在你这台电脑的浏览器里：不联网、不上传、不需要账号。
 它**只改字段的值**——不会替你点提交、保存、下一步，也不会替你上传任何东西。
 
-**当前版本 `0.3.8`。** 每个版本改了什么见 [CHANGELOG.md](CHANGELOG.md)。
+**当前版本 `0.3.9`。** 每个版本改了什么见 [CHANGELOG.md](CHANGELOG.md)。
 
 <img src="docs/popup-review.png" alt="弹窗：扫描之后逐项确认要填的字段" width="420">
 
@@ -301,6 +301,10 @@ updated_at=2026-09-11T08:00:00.000Z
 - **前程无忧 eHire 表单**：支持 `dt/dd` 标签、编号教育字段、jQuery 学校/专业自动补全以及 My97 只读日期框。
   “毕业学校2”等字段使用第二条教育资料；“最高学历”这一组使用第一条，请把最高学历放在资料第一条。
   课程列表合并为多行内容。学校或专业不在页面字典里时，需要在网页选择“其他”后填写，不会只改显示文字就报告成功。
+- **华润电力表单**：逐字段读取分区标签，教育、实习、家庭、项目各绑定自己的记录；基本信息的学历资料取第一条教育经历。
+  家属资料缺失时不会改用本人资料，绩点不会借用绩点满分。国籍/地区及家属出生日期可在编辑器和模板中填写。
+  排名区间不等价时不代选；专业弹窗只选择完全对应的条目并确认；省市双下拉使用 `省/市` 格式。
+  “是否第一学历”等未提供的答案保留待确认。保存页验证及截图对应问题见 [华润兼容检查](docs/crpower-compatibility.md)。
 
 ### 网站
 
@@ -441,6 +445,7 @@ node --test 测试/content-helpers.test.js 测试/profile-parser.test.js 测试/
 .\测试\dynamic-smoke.ps1
 .\测试\ats-adapter-dynamic-smoke.ps1
 .\测试\ehire-smoke.ps1
+.\测试\crpower-smoke.ps1
 .\测试\frame-smoke.ps1
 .\测试\shadow-smoke.ps1
 .\测试\phoenix-smoke.ps1
@@ -452,7 +457,7 @@ node --test 测试/content-helpers.test.js 测试/profile-parser.test.js 测试/
 .\测试\pack-smoke.ps1
 ```
 
-- `node --test` 跑三个文件、148 个用例：`content-helpers.test.js`（匹配与写入的纯函数）、
+- `node --test` 跑三个文件、153 个用例：`content-helpers.test.js`（匹配与写入的纯函数）、
   `profile-parser.test.js`（模板解析与序列化）、`shared.test.js`（三方合并、存储错误处理与两页共用的源码约定）。
 - 各 `*-smoke.ps1` 只使用 `测试/` 下的合成夹具，不读取真实简历。`shadow-smoke` 覆盖 open shadow root、
   嵌套 shadow root 和 contenteditable；`phoenix-smoke` 覆盖无名标签版面下的下拉、纯 div 单选组和两级级联；

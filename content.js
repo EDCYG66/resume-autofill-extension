@@ -26,7 +26,7 @@
 }(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
   var CONTENT_VERSION = readExtensionVersion();
-  var CONTROL_SELECTOR = 'input:not([type="hidden"]), textarea, select, [contenteditable=""], [contenteditable="true" i], [contenteditable="plaintext-only" i], [role="combobox"], [aria-haspopup="listbox"], .ant-select, .ant-select-selection, .el-select, .el-select__input, .ivu-select-selection, .select2-selection, .n-select, .n-base-selection, .arco-select, .t-select, .t-select-input, .semi-select, .next-select, .v-select';
+  var CONTROL_SELECTOR = 'input:not([type="hidden"]), textarea, select, [contenteditable=""], [contenteditable="true" i], [contenteditable="plaintext-only" i], [role="combobox"], [aria-haspopup="listbox"], .ant-select, .ant-select-selection, .el-select, .el-select__input, .ivu-select-selection, .select2-selection, .n-select, .n-base-selection, .arco-select, .t-select, .t-select-input, .semi-select, .next-select, .v-select, .cascader-plugins-wrap';
   var MAX_FRAMES = 12;
   // Open shadow roots are walked on every scan, so the traversal is capped: a page with thousands
   // of custom elements must not turn one click into a full-tree crawl.
@@ -100,6 +100,7 @@
     name: ['姓名', '名字', '真实姓名', '本人姓名', '申请人姓名', '您的姓名', '中文姓名', '用户姓名', 'name', 'full name'],
     gender: ['性别', '您的性别', 'gender', 'sex'],
     birth_date: ['出生日期', '出生年月', '出生年月日', '出生日', '生日', '出生时间', 'birth date', 'birthday', 'date of birth', 'dob'],
+    nationality: ['国籍', '国籍/地区', '国籍地区', 'nationality'],
     age: ['年龄', '您的年龄', 'age'],
     work_start_date: ['参加工作时间', '开始工作时间', '首次参加工作时间', '参加工作日期'],
     work_years: ['工作经验', '工作年限', '工作经历年限', '从业年限', '经验年限'],
@@ -150,7 +151,7 @@
     second_major: ['第二专业', '第二学位专业', '辅修专业', '双学位专业'],
     major_category: ['专业分类', '专业类别', '专业大类', '最高学历专业分类'],
     major_rank: ['专业排名', '成绩排名', '年级排名', '班级排名', '排名'],
-    gpa: ['绩点', '平均绩点', '成绩绩点', '平均学分绩点', '学分绩点', '平均成绩', '均分', '平均分', 'gpa'],
+    gpa: ['绩点', '绩点成绩', '平均绩点', '成绩绩点', '平均学分绩点', '学分绩点', '平均成绩', '均分', '平均分', 'gpa'],
     english_level: ['英语等级', '英语级别', '英语水平', '外语等级', '外语水平'],
     english_score: ['英语等级成绩', '英语成绩', '英语分数', '四六级成绩', '外语成绩', '外语等级成绩'],
     cet4_score: ['cet-4分数', 'cet4分数', '英语四级成绩', '四级成绩', '四级分数', 'cet4成绩', 'cet-4成绩', '四级分数/水平', 'cet-4', 'cet4'],
@@ -165,7 +166,7 @@
     score_max: ['满分', '成绩满分', '总分满分'],
     has_failed_course: ['是否有挂科历史', '挂科历史', '是否有挂科经历', '挂科经历', '是否有挂科', '有无挂科', '挂科'],
     // 工作 / 实习
-    employer: ['公司', '公司名称', '企业名称', '单位', '单位名称', '工作单位', '任职单位', '雇主'],
+    employer: ['公司', '公司名称', '企业名称', '单位', '单位名称', '工作单位', '实习单位', '任职单位', '雇主'],
     role: ['职位', '职位名称', '职务', '职务名称', '岗位', '担任职务'],
     organization: ['组织', '组织名称', '项目单位'],
     employer_type: ['单位性质', '公司性质', '企业性质', '单位类型', '单位分类'],
@@ -229,9 +230,10 @@
     'family.relation': ['关系', '称谓', '与本人关系', '亲属关系'],
     'family.name': ['姓名', '父亲姓名', '母亲姓名', '父母姓名', '亲属姓名'],
     'family.employer': ['工作单位', '单位名称', '所在单位', '父亲工作单位', '母亲工作单位'],
-    'family.role': ['职务', '职位', '父亲职务', '母亲职务'],
+    'family.role': ['职务', '职位', '职务或岗位', '父亲职务', '母亲职务'],
+    'family.birth_date': ['出生日期', '出生年月', '生日'],
     'family.phone': ['联系电话', '手机号码', '父亲电话', '母亲电话', '亲属电话'],
-    'employment.description': ['工作内容', '工作职责', '岗位职责', '实习内容', '工作描述'],
+    'employment.description': ['工作内容', '工作职责', '岗位职责', '实习内容', '实习描述', '工作描述'],
     'application_answers.question': ['题目'],
     'application_answers.answer': ['回答']
   };
@@ -274,6 +276,7 @@
   }
   function customControlValue(control) {
     if (!control) return '';
+    if (control.matches && control.matches('.cascader-plugins-wrap')) return Array.prototype.slice.call(control.querySelectorAll('.ant-select')).map(customControlValue).filter(function (value) { return value && !isGenericPrompt(value); }).join(' / ');
     if (control.querySelector) {
       var selectors = ['.ant-select-selection-selected-value', '.ant-select-selection-item', '.el-select__tags-text', '.el-tag__content', '.el-select__placeholder:not(.is-transparent)', '.el-select__selected-item:not(.el-select__input-wrapper):not(.is-transparent)', '.el-input__inner', '[aria-selected="true"]'];
       for (var i = 0; i < selectors.length; i++) {
@@ -302,7 +305,7 @@
     var role = normalizeText(element.role || (element.getAttribute && element.getAttribute('role')));
     var popup = normalizeText(element.ariaHaspopup || element['aria-haspopup'] || (element.getAttribute && element.getAttribute('aria-haspopup')));
     var className = String(element.className || '').toLowerCase();
-    return role === 'combobox' || role === 'listbox' || popup === 'listbox' || CUSTOM_SELECT_CLASS_RE.test(className);
+    return role === 'combobox' || role === 'listbox' || popup === 'listbox' || CUSTOM_SELECT_CLASS_RE.test(className) || /(^|\s)cascader-plugins-wrap(\s|$)/.test(className);
   }
   function isLinkedComboboxInput(control) {
     return Boolean(control && /(^|\s)custom-combobox-input(\s|$)/.test(String(control.className || '')));
@@ -364,11 +367,14 @@
     var type = normalizeText(element.type);
     if (['hidden', 'submit', 'reset', 'button', 'image', 'file'].indexOf(type) >= 0) return false;
     if (element.getAttribute && element.getAttribute('aria-hidden') === 'true') return false;
+    if (element.closest && element.closest('.ant-upload, .ant-upload-list')) return false;
+    if (element.closest && element.closest('.cascader-plugins-wrap') && !(element.matches && element.matches('.cascader-plugins-wrap'))) return false;
+    if (element.matches && element.matches('.ant-select-selection') && element.closest('.ant-select') && element.closest('.ant-select') !== element) return false;
     if (element.tagName && element.tagName.toLowerCase() === 'input') {
       var selectAncestor = element.closest && element.closest('.el-select, .ant-select, .arco-select, .t-select');
       if (selectAncestor && selectAncestor !== element && isCustomSelectControl(selectAncestor)) {
         var cls = String(element.className || '');
-        if (cls.indexOf('select__input') >= 0 || cls.indexOf('search-input') >= 0 || cls.indexOf('selection-search') >= 0) {
+        if (cls.indexOf('select__input') >= 0 || cls.indexOf('search-input') >= 0 || cls.indexOf('selection-search') >= 0 || cls.indexOf('ant-select-search__field') >= 0) {
           return false;
         }
       }
@@ -398,7 +404,7 @@
     var text = cleanFieldLabel(value);
     return ['应聘渠道', '个人基本信息', '求职意向', '教育经历', '英语能力', '其他外语能力', '计算机技能', '专业技能', '实习经历', '获奖或社团职务', '专利', '自我评价'].indexOf(text) >= 0;
   }
-  function preferredContainerSelectors() { return ['.resume-operation-wrap .form-cell', '.resume-operation-wrap .form-cell-right', '.ant-form-item', '.el-form-item', '.form-item--phoenix', '.beisen-form-item', '[data-field-container]', '.form-item']; }
+  function preferredContainerSelectors() { return ['.ant-form-item', '.el-form-item', '.form-item--phoenix', '.beisen-form-item', '[data-field-container]', '.form-item', '.resume-operation-wrap .form-cell', '.resume-operation-wrap .form-cell-right']; }
   function nearestResumeContainer(element) {
     if (!element) return null;
     var selectors = preferredContainerSelectors();
@@ -425,6 +431,11 @@
     return '';
   }
   function containerSectionLabel(container) {
+    var cell = container && container.closest && container.closest('.resume-operation-wrap .form-cell');
+    if (cell) {
+      var localTitle = cell.querySelector('.tit-wrap .tit');
+      return cleanFieldLabel(textOf(localTitle).replace(/必填|选填/g, ' '));
+    }
     var node = container;
     var depth = 0;
     while (node && depth < 5) {
@@ -437,6 +448,43 @@
       depth += 1;
     }
     return '';
+  }
+  function resumeSectionContext(control) {
+    if (!control || !control.closest) return null;
+    var cell = control.closest('.resume-operation-wrap .form-cell');
+    if (!cell) return null;
+    var name = containerSectionLabel(cell);
+    var sections = { '个人基本信息': 'basic', '基本信息': 'basic', '求职意向': 'intention', '教育经历': 'education',
+      '实习经历': 'employment', '工作经历': 'employment', '家庭关系': 'family', '家庭背景': 'family',
+      '项目经验': 'projects', '项目经历': 'projects', '自我评价': 'self_evaluation', '英语能力': 'skills',
+      '专业技能': 'skills', '证书': 'skills', '奖励活动': 'honors' };
+    var row = control.closest('.form-cell-inner');
+    var rows = Array.prototype.slice.call(cell.querySelectorAll('.form-cell-inner'));
+    return sections[name] ? { section: sections[name], name: name, record: Math.max(0, rows.indexOf(row)) + 1,
+      field: containerFieldLabel(nearestResumeContainer(control), control), cell: cell } : null;
+  }
+  function sectionProfileValues(context, values) {
+    if (!context) return values;
+    var prefix = context.section + '.' + context.record + '.';
+    return values.filter(function (item) {
+      var key = item.profileKey;
+      var field = normalizeText(context.field);
+      if (field === '是否第一学历') return key === 'education.' + context.record + '.first_degree';
+      if (field === '绩点成绩') return key === 'education.' + (context.section === 'basic' ? 1 : context.record) + '.gpa';
+      if (key.indexOf('custom_fields.') === 0) return true;
+      if (context.section === 'basic') return key.indexOf('basic.') === 0 || key.indexOf('education.1.') === 0 || key.indexOf('additional.') === 0;
+      if (context.section === 'intention') return key.indexOf('intention.') === 0;
+      if (context.section === 'self_evaluation') return key === 'self_evaluation';
+      return key.indexOf(prefix) === 0;
+    });
+  }
+  function sectionFieldValue(context, values) {
+    if (!context) return null;
+    var field = normalizeText(context.field);
+    var key = null;
+    if (context.section === 'basic' && /有无亲属.*华润电力工作/.test(field)) key = 'additional.relatives_in_company';
+    if (context.section === 'self_evaluation' && field === '评价内容') key = 'self_evaluation';
+    return key ? values.find(function (item) { return item.profileKey === key; }) || null : null;
   }
   // Stable identity for a DOM container, used to tell radio groups apart when the page
   // renders no name attribute to group them by.
@@ -784,7 +832,7 @@
     return 'none';
   }
   function getSiteKey(context) { if (context && context.siteKey) return String(context.siteKey); if (typeof location !== 'undefined' && location.origin) return location.origin; return ''; }
-  function makeFingerprint(control, label) { control = controlIdentity(control); var type = normalizeText(control && (control.type || control.tagName || 'field')) || 'field'; var stable = control && (control.name || control.id || control.getAttribute && control.getAttribute('aria-label') || label || 'field'); return type + ':' + normalizeText(stable); }
+function makeFingerprint(control, label) { control = controlIdentity(control); var type = normalizeText(control && (control.type || control.tagName || 'field')) || 'field'; var stable = control && (control.name || control.id || control.getAttribute && control.getAttribute('aria-label') || label || 'field'); var context = control && !control.name && !control.id ? resumeSectionContext(control) : null; return type + ':' + normalizeText(stable) + (context ? ':' + context.section + ':' + context.record : ''); }
   function isSensitiveField(controlLike) { var type = normalizeText(controlLike && controlLike.type); var text = [controlLike && controlLike.label, controlLike && controlLike.name, controlLike && controlLike.id, controlLike && controlLike.placeholder].filter(Boolean).join(' '); return type === 'password' || type === 'file' || SENSITIVE_RE.test(text); }
   function siteMappingMatches(mapping, siteKey, fingerprint, label) { if (!mapping || String(mapping.site_key || '') !== String(siteKey || '')) return false; if (mapping.fingerprint && String(mapping.fingerprint) === String(fingerprint)) return true; if (mapping.selector_hint && String(mapping.selector_hint) === String(fingerprint)) return true; return Boolean(mapping.label && normalizeText(mapping.label) === normalizeText(label)); }
   // 父亲姓名, 母亲联系电话, 亲属工作单位 …: an attribute of somebody else. Answering those with
@@ -802,6 +850,7 @@
     var profileKey = String(item.profileKey || '');
     var sectionKey = profileKey.replace(/\.\d+\./, '.');
     var normalizedLabel = normalizeText(label);
+    if (sectionKey === 'additional.relatives_in_company' && /^(亲属关系|家庭关系)$/.test(normalizedLabel)) return 'none';
     // A question about accepting reassignment contains the generic word 岗位, but it is not the
     // applicant's target role. Do not let the broad target_role alias steal it when the dedicated
     // accept_adjustment field is empty or absent.
@@ -879,7 +928,7 @@
     var values = [];
     function add(prefix, value, label, aliases) {
       if (value == null || value === '' || isPlaceholderValue(value)) return;
-      if (/^education\.\d+\.courses$/.test(prefix) && Array.isArray(value)) {
+      if (/^(education\.\d+\.courses|projects\.\d+\.duties)$/.test(prefix) && Array.isArray(value)) {
         return add(prefix, value.filter(function (course) { return typeof course === 'string' && course.trim() && !isPlaceholderValue(course); }).join('\n'), label, aliases);
       }
       if (Array.isArray(value)) return value.forEach(function (item, index) { add(prefix + '.' + (index + 1), item, label, aliases); });
@@ -1007,7 +1056,24 @@
   function matchSelectOption(options, expected) {
     var target = normalizeText(expected); if (!target) return -1;
     for (var i = 0; i < options.length; i++) if (normalizeText(textOf(options[i])) === target || normalizeText(options[i].value) === target) return i;
-    for (var j = 0; j < options.length; j++) { var candidate = normalizeText(textOf(options[j])); if (candidate && samePolarity(candidate, target) && (candidate.indexOf(target) >= 0 || target.indexOf(candidate) >= 0)) return j; }
+    // Ranking intervals are not interchangeable: 前20% includes 前5%, whereas 5%-20% excludes it.
+    // Accept equal intervals or one unambiguous bucket for a precise percentile, never substrings.
+    if (/%/.test(target) && options.some(function (option) { return /%/.test(textOf(option)); })) {
+      var targetRange = percentageRange(target);
+      var hits = [];
+      if (!targetRange) return -1;
+      options.forEach(function (option, index) {
+        var range = percentageRange(textOf(option));
+        if (!range) return;
+        if (targetRange.point ? targetRange.low > range.low && targetRange.low <= range.high
+          : range.low === targetRange.low && range.high === targetRange.high) hits.push(index);
+      });
+      return hits.length === 1 ? hits[0] : -1;
+    }
+    var contained = [];
+    for (var j = 0; j < options.length; j++) { var candidate = normalizeText(textOf(options[j])); if (candidate && samePolarity(candidate, target) && (candidate.indexOf(target) >= 0 || target.indexOf(candidate) >= 0)) contained.push(j); }
+    if (contained.length === 1) return contained[0];
+    if (contained.length > 1) return /[、,，;；]/.test(String(expected)) ? contained[0] : -1;
     var targetStripped = stripOptionSuffix(target); if (targetStripped && targetStripped !== target) {
       for (var k = 0; k < options.length; k++) { var stripped = stripOptionSuffix(textOf(options[k])); if (stripped && (stripped === targetStripped || stripped.indexOf(targetStripped) >= 0 || targetStripped.indexOf(stripped) >= 0)) return k; }
     }
@@ -1026,6 +1092,17 @@
     var needed = optionTokens(target); if (!needed.length) return -1;
     for (var m = 0; m < options.length; m++) { var candidateTokens = optionTokens(textOf(options[m])); if (candidateTokens.length && candidateTokens.length <= needed.length * 3 && tokensCover(candidateTokens, needed)) return m; }
     return -1;
+  }
+  function percentageRange(value) {
+    var text = normalizeText(value).replace(/[–—~～至]/g, '-');
+    var range = text.match(/^(\d+(?:\.\d+)?)%?-(\d+(?:\.\d+)?)%$/);
+    if (range) return { low: Number(range[1]), high: Number(range[2]), point: false };
+    var top = text.match(/^前(\d+(?:\.\d+)?)%$/);
+    if (top) return { low: 0, high: Number(top[1]), point: false };
+    var above = text.match(/^(\d+(?:\.\d+)?)%(?:及以上|以上)$/);
+    if (above) return { low: Number(above[1]), high: 100, point: false };
+    var point = text.match(/^(\d+(?:\.\d+)?)%$/);
+    return point ? { low: Number(point[1]), high: Number(point[1]), point: true } : null;
   }
   function matchChoice(choices, expected) { return matchSelectOption(choices.map(function (choice) { return { value: choice.value, text: textOf(choice) || choice.value }; }), expected); }
   // Only a control that renders as a button can be a submit control.
@@ -1339,17 +1416,23 @@
     controls = dedupeControlDescriptors(controls);
     var candidates = dedupeFieldDescriptors(controls.filter(function (control) { return isCustomChoiceGroup(control) || !isSubmitLike(control); }).map(function (control, index) {
       var label = cleanFieldLabel(deriveLabel(control)); var fingerprint = makeFingerprint(control, label); var sensitive = isSensitiveField({ type: control.type || control.tagName, label: label, name: control.name, id: control.id, placeholder: control.placeholder }); var scope = controlScope(control);
+      var sectionContext = resumeSectionContext(control);
+      var eligibleValues = sectionProfileValues(sectionContext, values);
       var mapping = mappings.find(function (item) { return siteMappingMatches(item, siteKey, fingerprint, label); }); var mapped = mapping ? values.find(function (item) { return item.profileKey === mapping.profile_key; }) : null; var match = mapped;
+      if (sectionContext && mapped && eligibleValues.indexOf(mapped) < 0) { mapped = null; match = null; }
       var slot = definitionEducationSlot(control);
       var matchLabel = slot ? slot.label : [label, control.name || '', control.id || '', control.getAttribute && control.getAttribute('aria-label') || ''].filter(Boolean).join(' ');
       if (!match && slot && supplementIsEnabled(control, slot)) match = values.find(function (item) { return item.profileKey === slot.profileKey; }) || null;
       // A numbered education column is bound to that record even when its value is missing.
       // Falling back to the global unused-value pool can put a job date into a graduation field.
-      if (!match && !slot) match = findLearnedValue(label, values, used, learned);
-      if (!match && !slot) match = findProfileValue(matchLabel, values, used, learned);
+      var eligibleUsed = sectionContext ? Object.create(null) : used;
+      if (!match && !slot) match = sectionFieldValue(sectionContext, eligibleValues);
+      if (!match && !slot) match = findLearnedValue(label, eligibleValues, eligibleUsed, learned);
+      if (!match && !slot) match = findProfileValue(matchLabel, eligibleValues, eligibleUsed, learned);
       var currentValue = isCustomChoiceGroup(control) ? customChoiceValue(control) : isCustomSelectControl(control) ? customControlValue(control) : isEditableControl(control) ? textOf(control).trim() : control.value || '';
       var draft = mapping && findDraft(profile, siteKey, fingerprint, mapping.profile_key); var sourceValue = draft ? draft.value : match ? match.value : currentValue; var isNewField = !match; var confidence = fieldConfidence(match, mapping, label, matchLabel, learned, Boolean(mapped));
       if (match && slot && slot.confirm && !mapped) confidence = 'medium';
+      if (sectionContext && match && match === sectionFieldValue(sectionContext, eligibleValues)) confidence = 'high';
       var proposed = sourceValue;
       var linked = linkedNativeSelect(control);
       if (sourceValue) {
@@ -1373,7 +1456,7 @@
       // from a second field on the same page that could genuinely take it.
       if (match && confidence === 'high' && proposed && !isDateComponentLabel(label)) used[match.profileKey] = true;
       var identity = controlIdentity(control);
-      return { id: 'resume-field-' + index, controlType: isEditableControl(control) ? 'contenteditable' : control.tagName ? control.tagName.toLowerCase() : 'custom', label: label || '未标注字段', selectorHint: identity.id ? '#' + cssEscape(identity.id) : null, profileKey: match ? match.profileKey : null, confidence: confidence, currentValue: currentValue, proposedValue: proposed, isNewField: isNewField || !isUsableFieldLabel(label), fingerprint: fingerprint, siteKey: siteKey, sensitive: sensitive, remember: Boolean(mapping && mapping.confirmed), isDate: isDateField(control, label), name: identity.name || '', scope: scope };
+      return { id: 'resume-field-' + index, controlType: isEditableControl(control) ? 'contenteditable' : control.tagName ? control.tagName.toLowerCase() : 'custom', label: label || '未标注字段', selectorHint: identity.id ? '#' + cssEscape(identity.id) : null, profileKey: match ? match.profileKey : null, confidence: confidence, currentValue: currentValue, proposedValue: proposed, isNewField: isNewField || !isUsableFieldLabel(label), fingerprint: fingerprint, siteKey: siteKey, sensitive: sensitive, remember: Boolean(mapping && mapping.confirmed), isDate: isDateField(control, label), name: identity.name || '', scope: scope, sectionName: sectionContext ? sectionContext.name : '', recordIndex: sectionContext ? sectionContext.record : null, fieldLabel: sectionContext ? sectionContext.field : label };
     }).filter(shouldIncludeCandidate));
     lastScanDiagnostics = {
       adapters: activeAdapters,
@@ -1470,10 +1553,11 @@
   }
   function isLiveControl(control) { return Boolean(control) && (typeof control.isConnected === 'undefined' || control.isConnected); }
   function controlIndex() {
-    var index = { bySelector: Object.create(null), byFingerprint: Object.create(null), byLabel: Object.create(null) };
+    var index = { bySelector: Object.create(null), byFingerprint: Object.create(null), byLabel: Object.create(null), byScope: Object.create(null) };
     allControls().filter(isScannableControl).forEach(function (control) {
       var label = cleanFieldLabel(deriveLabel(control));
       var fingerprint = makeFingerprint(control, label);
+      index.byScope[fingerprint + '|' + controlScope(control)] = control;
       if (!index.byFingerprint[fingerprint]) index.byFingerprint[fingerprint] = control;
       var normalizedLabel = normalizeText(label);
       if (normalizedLabel && !index.byLabel[normalizedLabel]) index.byLabel[normalizedLabel] = control;
@@ -1485,10 +1569,13 @@
   function resolveField(field, index) {
     if (typeof document === 'undefined' || !field) return null;
     if (index) {
+      var scoped = field.scope && index.byScope && index.byScope[field.fingerprint + '|' + field.scope];
+      if (isLiveControl(scoped)) return scoped;
       var selected = field.selectorHint ? index.bySelector[field.selectorHint] : null;
       if (isLiveControl(selected) && (!field.fingerprint || makeFingerprint(selected, cleanFieldLabel(deriveLabel(selected))) === field.fingerprint)) return selected;
       var byFingerprint = field.fingerprint ? index.byFingerprint[field.fingerprint] : null;
       if (isLiveControl(byFingerprint)) return byFingerprint;
+      if (field.sectionName && field.recordIndex) return null;
       var byLabel = field.label ? index.byLabel[normalizeText(field.label)] : null;
       if (isLiveControl(byLabel)) return byLabel;
       if (isLiveControl(selected)) return selected;
@@ -2061,6 +2148,19 @@
       // makes a field fillable is a resolved profile key plus a value, not the absence of the flag.
       if (!field || !field.proposedValue || isPlaceholderValue(field.proposedValue) || field.confidence === 'none' || (field.isNewField && !field.profileKey)) { results.push({ id: field && field.id, status: 'skipped', reason: '没有可用的已确认资料' }); continue; }
       var control = resolveField(field, controlMap); if (!control || (isSubmitLike(control) && !isCustomChoiceGroup(control))) { results.push({ id: field.id, status: 'skipped', reason: '控件不存在或为提交控件' }); continue; }
+      if (isMajorDialogControl(control)) {
+        results.push(await fillMajorDialog(control, field));
+        continue;
+      }
+      if (control.matches && control.matches('.ant-calendar-picker-input')) {
+        var calendarAccepted = await fillLegacyAntCalendar(control, field.proposedValue);
+        results.push({ id: field.id, status: calendarAccepted ? 'filled' : 'failed', reason: calendarAccepted ? undefined : '日期面板未确认该日期，请手动选择' });
+        continue;
+      }
+      if (control.matches && control.matches('.cascader-plugins-wrap')) {
+        results.push(await fillPairedCascade(control, field));
+        continue;
+      }
       if (isLinkedComboboxInput(control)) {
         var backing = linkedNativeSelect(control);
         if (!backing) { results.push({ id: field.id, status: 'failed', reason: '自动补全框缺少对应的下拉字段' }); continue; }
@@ -2142,6 +2242,90 @@
       results.push(fallback);
     }
     return results;
+  }
+  function isMajorDialogControl(control) {
+    return Boolean(control && control.matches && control.matches('.ant-input') && control.closest('.resume-operation-wrap') && /^请选择专业/.test(control.placeholder || ''));
+  }
+  async function fillPairedCascade(control, field) {
+    var selects = Array.prototype.slice.call(control.querySelectorAll('.ant-select'));
+    var parts = valueParts(field.proposedValue);
+    if (parts.length !== selects.length) return { id: field.id, status: 'failed', reason: '请将地区资料写成省/市，各级需对应网页选项' };
+    for (var index = 0; index < selects.length; index++) {
+      var result = await fillCustomSelect(selects[index], { id: field.id, label: '地区层级', proposedValue: parts[index] });
+      if (result.status !== 'filled') return result;
+    }
+    var shown = customControlValue(control);
+    return { id: field.id, status: parts.every(function (part) { return normalizeText(shown).indexOf(normalizeText(part)) >= 0; }) ? 'filled' : 'failed' };
+  }
+  async function fillLegacyAntCalendar(control, expected) {
+    var parts = parseDateParts(expected);
+    if (!parts) return false;
+    dispatchOpenSequence(control);
+    function activeCalendar() {
+      var panels = [];
+      searchRoots(control).forEach(function (root) { panels = panels.concat(Array.prototype.slice.call(root.querySelectorAll('.ant-calendar'))); });
+      return panels.find(isVisible) || null;
+    }
+    var panel = await waitFor(activeCalendar, 600);
+    if (!panel) return false;
+    var wanted = parts.year + '-' + parts.month + (parts.day ? '-' + parts.day : '');
+    for (var attempt = 0; attempt < 120 && panel; attempt++) {
+      var cell = Array.prototype.slice.call(panel.querySelectorAll('[title]')).find(function (el) {
+        return el.getAttribute('title') === wanted && isVisible(el) && !isClickHazard(el)
+          && !el.matches('.ant-calendar-disabled-cell, .ant-calendar-month-panel-cell-disabled')
+          && (parts.day ? Boolean(el.querySelector('.ant-calendar-date')) : el.matches('.ant-calendar-month-panel-cell'));
+      });
+      if (cell) {
+        dispatchOpenSequence(cell);
+        return Boolean(await waitFor(function () { return control.value === wanted && !activeCalendar() ? true : null; }, 800));
+      }
+      var year = Number(textOf(panel.querySelector('.ant-calendar-year-select')).replace(/\D/g, ''));
+      var month = Number(textOf(panel.querySelector('.ant-calendar-month-select')).replace(/\D/g, ''));
+      if (!year || !month) return false;
+      var delta = (Number(parts.year) - year) * 12 + Number(parts.month) - month;
+      if (!delta) return false;
+      var selector = Math.abs(delta) >= 12 ? (delta > 0 ? '.ant-calendar-next-year-btn' : '.ant-calendar-prev-year-btn')
+        : (delta > 0 ? '.ant-calendar-next-month-btn' : '.ant-calendar-prev-month-btn');
+      var nav = panel.querySelector(selector);
+      if (!nav || isClickHazard(nav) || !isVisible(nav)) return false;
+      dispatchOpenSequence(nav);
+      var moved = await waitFor(function () {
+        var fresh = activeCalendar();
+        return fresh && (Number(textOf(fresh.querySelector('.ant-calendar-year-select')).replace(/\D/g, '')) !== year
+          || Number(textOf(fresh.querySelector('.ant-calendar-month-select')).replace(/\D/g, '')) !== month) ? fresh : null;
+      }, 200);
+      if (!moved) return false;
+      panel = moved;
+    }
+    return false;
+  }
+  async function fillMajorDialog(control, field) {
+    var expected = String(field.proposedValue || '').trim();
+    dispatchOpenSequence(control);
+    var dialog = await waitFor(function () {
+      var dialogs = [];
+      searchRoots(control).forEach(function (root) { dialogs = dialogs.concat(Array.prototype.slice.call(root.querySelectorAll('.ant-modal, [role="dialog"]'))); });
+      return dialogs.find(function (el) { var title = el.querySelector('.ant-modal-title'); return isVisible(el) && title && /专业/.test(textOf(title)); }) || null;
+    }, 700);
+    if (!dialog) return { id: field.id, status: 'failed', reason: '专业选择弹窗没有出现，请在网页手动选择' };
+    var search = dialog.querySelector('input[placeholder*="专业"]');
+    if (search) setNativeValue(search, expected);
+    // Wait for lazy search results. An exact row is required; a taxonomy category must not be
+    // chosen because it merely contains the supplied degree/major name.
+    var row = await waitFor(function () {
+      return Array.prototype.slice.call(dialog.querySelectorAll('li, [role="option"], [class*="item"]')).find(function (el) {
+        return isVisible(el) && !isClickHazard(el) && normalizeText(textOf(el)) === normalizeText(expected);
+      });
+    }, 600);
+    if (!row) return { id: field.id, status: 'failed', reason: '专业弹窗没有完全对应的选项，请确认网页专业分类' };
+    dispatchOpenSequence(row);
+    var footer = dialog.querySelector('.ant-modal-footer');
+    var confirm = footer && Array.prototype.slice.call(footer.querySelectorAll('button')).find(function (button) {
+      return isVisible(button) && !isClickHazard(button) && /^(选择|确定)$/.test(textOf(button).trim());
+    });
+    if (confirm) dispatchOpenSequence(confirm);
+    var accepted = await waitFor(function () { return normalizeText(control.value) === normalizeText(expected) && !isVisible(dialog) ? true : null; }, 800);
+    return { id: field.id, status: accepted ? 'filled' : 'failed', reason: accepted ? undefined : '专业选项未获页面确认' };
   }
   function collectDraftValues(fields) { return (fields || []).filter(function (field) { return field && field.remember && !field.sensitive && field.siteKey && field.fingerprint && field.profileKey && field.proposedValue && !isPlaceholderValue(field.proposedValue); }).map(function (field) { return { site_key: field.siteKey, fingerprint: field.fingerprint, profile_key: field.profileKey, value: String(field.proposedValue) }; }); }
   function upsertDrafts(existing, updates, timestamp) {
@@ -2238,10 +2422,10 @@
   }
   function rememberFields(fields, siteKey) {
     var controlMap = controlIndex();
-    var safeFields = (fields || []).filter(function (field) { return field && field.remember && !field.sensitive && field.profileKey && field.fingerprint; }).map(function (field) { return { siteKey: field.siteKey || siteKey, fingerprint: field.fingerprint, profileKey: field.profileKey, selectorHint: field.selectorHint, label: field.label }; });
+    var safeFields = (fields || []).filter(function (field) { return field && field.remember && !field.sensitive && field.profileKey && field.fingerprint; }).map(function (field) { return { siteKey: field.siteKey || siteKey, fingerprint: field.fingerprint, profileKey: field.profileKey, selectorHint: field.selectorHint, label: field.label, scope: field.scope, sectionName: field.sectionName, recordIndex: field.recordIndex }; });
     if (typeof document === 'undefined') return safeFields.length;
     safeFields.forEach(function (field) {
-      var control = resolveField({ selectorHint: field.selectorHint, label: field.label, fingerprint: field.fingerprint }, controlMap);
+      var control = resolveField(field, controlMap);
       if (!control) return;
       var timer = null;
       var save = function () {

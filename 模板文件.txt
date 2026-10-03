@@ -29,6 +29,8 @@ name=
 gender=
 # 出生日期：格式 2000-01-01
 birth_date=
+# 国籍/地区：使用网页实际选项，例如 中国大陆；不确定时留空
+nationality=
 # 年龄：只填数字
 age=
 # 参加工作时间：格式 2023-07
@@ -323,6 +325,8 @@ evidence=
 relation=
 # 姓名
 name=
+# 家属出生日期：格式 1970-01-01；未知时留空
+birth_date=
 # 工作单位
 employer=
 # 职务

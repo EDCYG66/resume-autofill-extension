@@ -508,7 +508,7 @@ test('offers the family section fields to the assignment picker', () => {
   const catalog = require('../profile-parser.js').ASSIGNABLE_FIELDS;
   const family = catalog.filter((g) => g.section === 'family');
   assert.equal(family.length, 1);
-  assert.deepEqual(family[0].fields.map((field) => field[0]), ['relation', 'name', 'employer', 'role', 'phone']);
+  assert.deepEqual(family[0].fields.map((field) => field[0]), ['relation', 'name', 'birth_date', 'employer', 'role', 'phone']);
 });
 
 test('keeps a section leaf from inheriting the generic aliases of its key', () => {
@@ -1273,4 +1273,38 @@ test('drops blank and unfinished entries from a combined course list', () => {
 test('keeps an education course list away from unrelated numeric field names', () => {
   const values = Content.flattenProfile({ education: [{ courses: ['控制', '信号'] }] });
   assert.equal(Content.profileLabelStrength(values[0], 'CET-4分数'), 'none');
+});
+
+test('does not treat overlapping percentile descriptions as the same ranking bucket', () => {
+  const options = ['前5%', '5%-20%', '20%-50%', '50%及以上'].map(text => ({ text, value: text }));
+  assert.equal(Content.matchSelectOption(options, '前20%'), -1);
+  assert.equal(Content.matchSelectOption(options, '前10%'), -1);
+  assert.equal(Content.matchSelectOption(options, '5%–20%'), 1);
+  assert.equal(Content.matchSelectOption(options, '10%'), 1);
+  assert.equal(Content.matchSelectOption(options, '20%'), 1);
+  assert.equal(Content.matchSelectOption(options, '22%'), 2);
+});
+
+test('ambiguous overlapping ranking options require manual confirmation', () => {
+  assert.equal(Content.matchSelectOption([{ text: '前20%' }, { text: '5%-20%' }], '10%'), -1);
+});
+
+test('nationality and family birth date round-trip through the supported schema', () => {
+  const Profile = require('../profile-parser.js');
+  const profile = Profile.parse('[basic]\nnationality=中国大陆\n[family.1]\nname=示例家属\nbirth_date=1970-01-01\n');
+  assert.equal(profile.basic.nationality, '中国大陆');
+  assert.equal(profile.family[0].birth_date, '1970-01-01');
+  const reread = Profile.parse(Profile.stringify(profile));
+  assert.equal(reread.family[0].birth_date, '1970-01-01');
+  assert.ok(Profile.ASSIGNABLE_FIELDS.find(group => group.section === 'family').fields.some(field => field[0] === 'birth_date'));
+});
+
+test('does not choose one country or region from an ambiguous substring', () => {
+  assert.equal(Content.matchSelectOption([{text:'中国香港'},{text:'中国大陆'},{text:'中国澳门'}], '中国'), -1);
+  assert.equal(Content.matchSelectOption([{text:'中国香港'},{text:'中国大陆'}], '中国大陆'), 1);
+});
+
+test('kinship label cannot match a company-relative yes-or-no answer', () => {
+  assert.equal(Content.profileLabelStrength({profileKey:'additional.relatives_in_company',label:'是否有亲友在本公司',value:'否'}, '亲属关系'), 'none');
+  assert.equal(Content.profileLabelStrength({profileKey:'family.1.relation',label:'关系',value:'父亲'}, '亲属关系'), 'exact');
 });

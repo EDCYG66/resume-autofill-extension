@@ -1,0 +1,57 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>CR Power structural regression</title></head><body>
+<form class="resume-operation-wrap"></form><pre id="crpower-result"></pre>
+<script>
+// Synthetic values; structure reproduces the captured form-cell and Ant Design v3 fields.
+window.testSections = [
+ ['个人基本信息', [['姓名','text'],['出生日期','date'],['国籍/地区','select',['中国大陆','中国香港']],['证件类型','select',['身份证','护照']],['学历','select',['硕士','本科']],['专业排名','select',['前5%','5%-20%','20%-50%','50%及以上']],['绩点成绩','text'],['您有无亲属在华润电力工作','select',['是','否']],['专业','dialog']]],
+ ['教育经历', [['开始时间','text'],['学校名称','text'],['学历','select',['硕士','本科']],['是否第一学历','text']], 2],
+ ['实习经历', [['开始时间','text'],['结束时间','text'],['实习单位','text'],['实习描述','textarea']]],
+ ['家庭关系', [['姓名','text'],['亲属关系','text'],['出生日期','text'],['工作单位','text'],['职务或岗位','text']],2],
+ ['项目经验', [['项目名称','text'],['项目职责','textarea']],2],
+ ['自我评价', [['评价内容','textarea']]]
+];
+window.submits=0; window.commits={}; var ordinal=0;
+document.querySelector('form').addEventListener('submit',function(e){e.preventDefault();window.submits++;});
+window.testSections.forEach(function(section){
+ var cell=document.createElement('div');cell.className='form-cell';cell.innerHTML='<div class="tit-wrap"><div class="tit">'+section[0]+'<span>必填</span></div></div><div class="form-cell-right"></div>';
+ for(var record=0;record<(section[2]||1);record++){
+  var row=document.createElement('div');row.className='form-cell-inner';
+  section[1].forEach(function(field){
+   var item=document.createElement('div');item.className='ant-form-item';item.innerHTML='<div class="ant-form-item-label"><label>'+field[0]+'*</label></div><div class="ant-form-item-control-wrapper"><span class="ant-form-item-children"></span></div>';
+   var inner=item.querySelector('span');var key=section[0]+'|'+record+'|'+field[0];
+   if(field[1]==='select'){
+    var menuId='menu-'+(++ordinal);inner.innerHTML='<div class="ant-select" aria-controls="'+menuId+'"><div class="ant-select-selection" role="combobox" aria-controls="'+menuId+'"><span class="ant-select-selection-selected-value"></span><div class="ant-select-search"><input class="ant-select-search__field"></div></div></div>';
+    var menu=document.createElement('div');menu.id=menuId;menu.className='ant-select-dropdown ant-select-dropdown-hidden';menu.hidden=true;menu.setAttribute('role','listbox');
+    field[2].forEach(function(value){var option=document.createElement('div');option.setAttribute('role','option');option.textContent=value;option.addEventListener('click',function(){inner.querySelector('.ant-select-selection-selected-value').textContent=value;window.commits[key]=value;menu.hidden=true;menu.classList.add('ant-select-dropdown-hidden');});menu.appendChild(option);});
+    inner.querySelector('.ant-select').addEventListener('click',function(){menu.hidden=false;menu.classList.remove('ant-select-dropdown-hidden');});document.body.appendChild(menu);
+   }else{
+    var input=document.createElement(field[1]==='textarea'?'textarea':'input');input.className='ant-input';
+    if(field[1]==='dialog') {input.placeholder='请选择专业';input.addEventListener('click',function(){window.openMajor(input,key);});}
+    if(field[1]==='date'){input.className='ant-calendar-picker-input ant-input';input.readOnly=true;input.addEventListener('click',function(){
+      var panel=document.querySelector('.ant-calendar');if(panel)panel.remove();panel=document.createElement('div');panel.className='ant-calendar';
+      panel.innerHTML='<div class="ant-calendar-header"><button type="button" class="ant-calendar-prev-year-btn">上一年</button><span class="ant-calendar-year-select">2026年</span><span class="ant-calendar-month-select">6月</span></div><table><tr><td title="2026-06-03"><div class="ant-calendar-date">3</div></td></tr></table>';
+      panel.querySelector('.ant-calendar-prev-year-btn').addEventListener('click',function(){var span=panel.querySelector('.ant-calendar-year-select');var year=Number(span.textContent.replace(/\D/g,''))-1;span.textContent=year+'年';panel.querySelector('td').title=year+'-06-03';});
+      panel.querySelector('td').addEventListener('click',function(){input.value='2001-06-03';window.commits[key]=input.value;panel.remove();});document.body.appendChild(panel);
+    });}
+    inner.appendChild(input);
+   }
+   row.appendChild(item);
+  });cell.querySelector('.form-cell-right').appendChild(row);
+ }
+ document.querySelector('form').appendChild(cell);
+});
+// This paired province/city picker is also present in the supplied capture.
+var basic=window.testSections[0];
+var firstRow=document.querySelector('.form-cell-inner');var residence=document.createElement('div');residence.className='ant-form-item';residence.innerHTML='<div class="ant-form-item-label"><label>现居住地*</label></div><div class="cascader-plugins-wrap"></div>';
+var group=residence.querySelector('.cascader-plugins-wrap');
+[['辽宁省','北京市'],['大连市','沈阳市']].forEach(function(options,index){var select=document.createElement('div');select.className='ant-select';var id='menu-'+(++ordinal);select.setAttribute('aria-controls',id);select.innerHTML='<span class="ant-select-selection-selected-value"></span>';group.appendChild(select);var menu=document.createElement('div');menu.className='ant-select-dropdown';menu.hidden=true;menu.id=id;menu.setAttribute('role','listbox');options.forEach(function(text){var option=document.createElement('div');option.setAttribute('role','option');option.textContent=text;option.addEventListener('click',function(){select.querySelector('span').textContent=text;window.commits['residence|'+index]=text;menu.hidden=true;});menu.appendChild(option);});select.addEventListener('click',function(){menu.hidden=false;});document.body.appendChild(menu);});firstRow.appendChild(residence);
+window.openMajor=function(input,key){
+ var modal=document.querySelector('.ant-modal');if(modal)modal.remove();
+ modal=document.createElement('div');modal.className='ant-modal';modal.setAttribute('role','dialog');
+ modal.innerHTML='<div class="ant-modal-title">请选择专业：</div><input placeholder="请输入专业名称"><ul><li>电子信息类</li><li>计算机类</li></ul><div class="ant-modal-footer"><button type="button">取消</button><button type="button">选择</button></div>';
+ var selected='';modal.querySelectorAll('li').forEach(function(li){li.addEventListener('click',function(){selected=li.textContent;});});
+ modal.querySelectorAll('button')[0].addEventListener('click',function(){modal.remove();});
+ modal.querySelectorAll('button')[1].addEventListener('click',function(){if(selected){input.value=selected;window.commits[key]=selected;modal.remove();}});
+ document.body.appendChild(modal);
+};
+</script></body></html>
