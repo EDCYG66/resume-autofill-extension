@@ -1243,7 +1243,10 @@ test('dynamic rescan state preserves user edits and watcher wiring', () => {
   assert.match(source, /function mergeScanCandidates/);
   assert.match(source, /candidate\.edited = true/);
   assert.match(source, /message\.type !== 'formChanged'/);
-  assert.match(source, /watchStatus/);
+  // Reopen now always reconciles with a dynamic rescan (edits preserved) instead of polling the
+  // dirty bit, and the content watcher is still torn down when the popup closes.
+  assert.match(source, /watchStop/);
+  assert.match(source, /runScan\(tab, 'dynamic', true\)/);
 });
 
 test('does not map a job-allocation question to the target role', () => {
@@ -1307,4 +1310,79 @@ test('does not choose one country or region from an ambiguous substring', () => 
 test('kinship label cannot match a company-relative yes-or-no answer', () => {
   assert.equal(Content.profileLabelStrength({profileKey:'additional.relatives_in_company',label:'是否有亲友在本公司',value:'否'}, '亲属关系'), 'none');
   assert.equal(Content.profileLabelStrength({profileKey:'family.1.relation',label:'关系',value:'父亲'}, '亲属关系'), 'exact');
+});
+
+// ---- Auto-reveal trigger classification (which page buttons the scan is allowed to click) ----
+test('classifies an add-row trigger only when it adds and is neither delete nor submit', () => {
+  assert.equal(Content.isAddRowTrigger('添加教育经历'), true);
+  assert.equal(Content.isAddRowTrigger('+ 新增工作经历'), true);
+  assert.equal(Content.isAddRowTrigger('继续添加项目经历'), true);
+  // A delete/remove control is never an add.
+  assert.equal(Content.isAddRowTrigger('删除教育经历'), false);
+  assert.equal(Content.isAddRowTrigger('移除本条'), false);
+  // A submit/save/next control is refused even when its caption also says 新增.
+  assert.equal(Content.isAddRowTrigger('提交申请'), false);
+  assert.equal(Content.isAddRowTrigger('保存并新增'), false);
+  assert.equal(Content.classifyRevealTrigger('下一步').submitLike, true);
+});
+
+test('binds an add-row trigger to a known repeated section by its wording', () => {
+  assert.equal(Content.sectionFromText('添加教育经历'), 'education');
+  assert.equal(Content.sectionFromText('新增实习经历'), 'employment');
+  assert.equal(Content.sectionFromText('新增项目经历'), 'projects');
+  assert.equal(Content.sectionFromText('添加荣誉奖励'), 'honors');
+  assert.equal(Content.sectionFromText('添加家庭成员'), 'family');
+  // An add control for something that is not a known repeated section is left unbound, so the
+  // reveal pass skips it rather than clicking a 添加附件 / 添加标签 button.
+  assert.equal(Content.sectionFromText('添加附件'), null);
+  assert.equal(Content.sectionFromText('添加标签'), null);
+});
+
+// ---- deriveLabel: labels that sit beside the control, not wrapping it ----
+function fakeNode(opts) {
+  return Object.assign({
+    textContent: '',
+    matches: function () { return false; },
+    querySelector: function () { return null; },
+    closest: function () { return null; },
+    getAttribute: function () { return null; },
+    previousElementSibling: null,
+    parentElement: null,
+    id: ''
+  }, opts);
+}
+
+test('reads a label from a preceding sibling element without a <label for>', () => {
+  const span = fakeNode({ textContent: '专业' });
+  const input = fakeNode({ previousElementSibling: span });
+  assert.equal(Content.siblingOrCellLabel(input), '专业');
+  assert.equal(Content.deriveLabel(input), '专业');
+});
+
+test('skips a required asterisk and borrows no neighbouring control as a label', () => {
+  const major = fakeNode({ textContent: '专业' });
+  const star = fakeNode({ textContent: '＊', previousElementSibling: major });
+  const input = fakeNode({ previousElementSibling: star });
+  assert.equal(Content.siblingOrCellLabel(input), '专业');
+  // A preceding sibling that is itself a form control must not be read as a label.
+  const neighbourField = fakeNode({ matches: function () { return true; } });
+  const next = fakeNode({ previousElementSibling: neighbourField });
+  assert.equal(Content.siblingOrCellLabel(next), '');
+});
+
+test('reads a table-layout label from the preceding cell in the same row', () => {
+  const labelCell = fakeNode({ textContent: '毕业院校' });
+  const valueCell = fakeNode({ previousElementSibling: labelCell });
+  const input = fakeNode({ closest: function (sel) { return sel === 'td, th' ? valueCell : null; } });
+  assert.equal(Content.siblingOrCellLabel(input), '毕业院校');
+});
+
+test('keeps aria-label and attribute fallbacks ahead of / behind the neighbour label', () => {
+  const span = fakeNode({ textContent: '专业' });
+  // aria-label is authoritative and still wins over a visible neighbour.
+  const withAria = fakeNode({ previousElementSibling: span, getAttribute: function (a) { return a === 'aria-label' ? '手机号码' : null; } });
+  assert.equal(Content.deriveLabel(withAria), '手机号码');
+  // With no neighbour, the weak name attribute is still used as before.
+  const byName = fakeNode({ getAttribute: function (a) { return a === 'name' ? 'phone' : null; } });
+  assert.equal(Content.deriveLabel(byName), 'phone');
 });

@@ -10,6 +10,7 @@
     activeTab: 'fill',
     lastScanTab: null,
     lastDiagnostics: null,
+    lastReveal: null,
     siteKey: ''
   };
 
@@ -193,6 +194,14 @@
     var serial = ++scanSerial;
     if (scanInFlight) return scanInFlight;
     scanInFlight = ensureLatestContent(tab.id).then(function () {
+      // Before a manual scan, open the additive affordances a form hides fields behind — collapsed
+      // panels and "添加教育经历"-style row buttons — so those fields can become candidates. Only on
+      // the manual path: a dynamic rescan must not re-trigger clicks (it would loop on its own
+      // mutations), and reopening reconciles without touching the page.
+      if (reason !== 'manual') return null;
+      return messageTab(tab.id, { type: 'reveal', profile: state.profile }).catch(function () { return null; });
+    }).then(function (revealed) {
+      if (reason === 'manual') state.lastReveal = revealed || null;
       return messageTab(tab.id, {
         type: 'scan',
         profile: state.profile,
@@ -797,7 +806,9 @@
         } else {
           var adapterNote = state.lastDiagnostics && state.lastDiagnostics.adapters && state.lastDiagnostics.adapters.length
             ? '，结构适配：' + state.lastDiagnostics.adapters.join('、') : '';
-          setStatus('扫描完成！找到 ' + state.candidates.length + ' 处表单，已自动对上 ' + matchedCount + ' 处' + adapterNote + '。确认无误后点击“帮我填上”。');
+          var revealNote = state.lastReveal && (state.lastReveal.expanded || state.lastReveal.added)
+            ? '，已自动' + (state.lastReveal.expanded ? '展开 ' + state.lastReveal.expanded + ' 处折叠栏目' : '') + (state.lastReveal.expanded && state.lastReveal.added ? '、' : '') + (state.lastReveal.added ? '新增 ' + state.lastReveal.added + ' 行' : '') : '';
+          setStatus('扫描完成！找到 ' + state.candidates.length + ' 处表单，已自动对上 ' + matchedCount + ' 处' + adapterNote + revealNote + '。确认无误后点击“帮我填上”。');
         }
       });
     }).catch(function (error) {
@@ -996,15 +1007,15 @@
     return activeTab().then(function (tab) {
       return restoreLastScan(tab).then(function (restored) {
         if (!restored) return false;
-        // A page may have rendered a new section while the popup was closed. The content-side
-        // watcher keeps only a dirty bit, so reopening can reconcile the cache without guessing.
-        return messageTab(tab.id, { type: 'watchStatus' }).then(function (watch) {
-          if (watch && watch.dirty) return runScan(tab, 'dynamic', true).then(function () { return true; });
-          return true;
-        }).catch(function () { return true; });
+        // Always reconcile on reopen. Chrome closes the popup the moment the applicant clicks the
+        // page, which is exactly when they expand a section or add a row; the content watcher is
+        // stopped on that close, so a late/async render never flips the dirty bit and a dirty-gated
+        // rescan would miss it. One cheap dynamic rescan (edits preserved) reflects the page as it
+        // stands now and restarts the watcher.
+        return runScan(tab, 'dynamic', true).then(function () { return true; }).catch(function () { return true; });
       });
     }).then(function (restored) {
-      if (restored) setStatus('已恢复上次的扫描结果（共 ' + state.candidates.length + ' 处）。确认后可直接点“帮我填上”。');
+      if (restored) setStatus('已按当前页面重新核对上次的扫描结果（共 ' + state.candidates.length + ' 处）。确认后可直接点“帮我填上”。');
     }).catch(function () {});
   }).catch(function (error) {
     setStatus('本地资料读取失败：' + (error && error.message ? error.message : '未知错误'), true);

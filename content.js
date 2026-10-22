@@ -8,6 +8,7 @@
         try {
           if (message && message.type === 'ping') sendResponse({ version: api.version });
           else if (message && message.type === 'scan') sendResponse({ candidates: api.scan(message.profile || {}, message.context || {}), diagnostics: api.getDiagnostics() });
+          else if (message && message.type === 'reveal') { api.reveal(message.profile || {}).then(function (summary) { sendResponse(summary); return; }, function () { sendResponse({ expanded: 0, added: 0, clicks: 0 }); }); }
           else if (message && message.type === 'fill') api.fill(message.fields || []).then(function (results) { sendResponse({ results: results }); return; }, function () { sendResponse({ results: [], error: '填充失败' }); });
           else if (message && message.type === 'remember') sendResponse({ remembered: api.rememberFields(message.fields || [], message.siteKey || '') });
           else if (message && message.type === 'watchStart') sendResponse(api.startFormWatch());
@@ -726,6 +727,46 @@
     }
     return labels;
   }
+  // A label that sits *beside* the control instead of wrapping it or pointing at it with for=:
+  //   <span class="label">专业</span><input>, or a table row whose preceding cell names the column.
+  // These layouts carry no <label for> and no form-item container, so without this the generic
+  // name/id/placeholder fallback wins with an opaque token and the field reads as unrecognised.
+  function elementHoldsControl(element) {
+    if (!element || !element.matches) return false;
+    try {
+      if (element.matches(CONTROL_SELECTOR)) return true;
+      return Boolean(element.querySelector && element.querySelector(CONTROL_SELECTOR));
+    } catch (_) { return false; }
+  }
+  function siblingOrCellLabel(element) {
+    if (!element) return '';
+    // Table layout: the label is the preceding cell (or a <th>) in the same row.
+    var cell = element.closest && element.closest('td, th');
+    if (cell) {
+      var prevCell = cell.previousElementSibling;
+      while (prevCell) {
+        if (!elementHoldsControl(prevCell)) {
+          var cellText = cleanFieldLabel(textOf(prevCell));
+          if (isUsableFieldLabel(cellText) && cellText.length <= 40) return cellText;
+        }
+        prevCell = prevCell.previousElementSibling;
+      }
+    }
+    // A preceding sibling element that reads as a label. A control (another field, or this field's
+    // own inner input) is skipped so a neighbour's value is never borrowed as a label. A trailing
+    // unit (<input><span>cm</span>) is a *following* sibling, so only preceding ones are considered.
+    var sibling = element.previousElementSibling;
+    var hops = 0;
+    while (sibling && hops < 4) {
+      if (!elementHoldsControl(sibling)) {
+        var text = cleanFieldLabel(textOf(sibling));
+        if (isUsableFieldLabel(text) && text.length <= 40) return text;
+      }
+      sibling = sibling.previousElementSibling;
+      hops += 1;
+    }
+    return '';
+  }
   function deriveLabel(element) {
     if (!element) return '';
     var definition = definitionField(element);
@@ -752,7 +793,14 @@
     }
     var label = element.closest && element.closest('label');
     if (label && !isGenericPrompt(textOf(label))) return cleanFieldLabel(combineContextLabel(textOf(label).trim(), ancestorContextLabels(element)));
-    var attributes = ['aria-label', 'name', 'id', 'title', 'placeholder'];
+    // aria-label is author-provided and stays ahead of visible-neighbour text; a visible sibling or
+    // table cell (what a human reads as the label) then outranks the weak name/id/title/placeholder
+    // attributes, which on Chinese forms are often pinyin or opaque ids that match no alias.
+    var ariaLabel = element.getAttribute && element.getAttribute('aria-label');
+    if (ariaLabel && !isGenericPrompt(ariaLabel.trim())) return cleanFieldLabel(combineContextLabel(ariaLabel.trim(), ancestorContextLabels(element)));
+    var adjacent = siblingOrCellLabel(element);
+    if (adjacent) return cleanFieldLabel(combineContextLabel(adjacent, ancestorContextLabels(element)));
+    var attributes = ['name', 'id', 'title', 'placeholder'];
     for (var i = 0; i < attributes.length; i++) { var attr = attributes[i]; if (element.getAttribute && element.getAttribute(attr)) { var value = element.getAttribute(attr).trim(); if (!isGenericPrompt(value)) return cleanFieldLabel(combineContextLabel(value, ancestorContextLabels(element))); } }
     var parent = element.parentElement;
     if (parent) {
@@ -2327,6 +2375,161 @@ function makeFingerprint(control, label) { control = controlIdentity(control); v
     var accepted = await waitFor(function () { return normalizeText(control.value) === normalizeText(expected) && !isVisible(dialog) ? true : null; }, 800);
     return { id: field.id, status: accepted ? 'filled' : 'failed', reason: accepted ? undefined : '专业选项未获页面确认' };
   }
+  // ---- Auto-reveal: open collapsed panels and add repeated rows before a scan ----
+  // A job form often hides fields behind a collapsed panel, or shows one education row with an
+  // "添加教育经历" button for the rest. The scan only sees rendered controls, so those fields never
+  // become candidates. This pass performs only the *additive, non-destructive* affordances: it
+  // expands collapsed panels and adds rows up to the number of records already in the profile, and
+  // it refuses anything that could submit, reset, delete or navigate. Switching tabs/steps is left
+  // to the applicant on purpose — activating another tab usually unmounts the current one's fields,
+  // which would lose more than it reveals. It runs only on a manual scan (popup side), so a dynamic
+  // rescan cannot loop on the mutations this itself causes.
+  var MAX_REVEAL_CLICKS = 16;
+  var MAX_ADD_CLICKS_PER_SECTION = 4;
+  var REVEAL_SETTLE_MS = 350;
+  var ADD_WORD_RE = /(添加|新增|增加|继续添加|再加一行|add)/i;
+  var REVEAL_DELETE_RE = /(删除|移除|清空|删掉|清除|remove|delete)/i;
+  var SECTION_WORD_RES = {
+    education: /(教育|学历|学习经历|教育背景)/,
+    employment: /(工作|实习|职业经历|工作经历|实习经历|工作经验)/,
+    projects: /(项目|科研|课题)/,
+    honors: /(荣誉|获奖|奖励|奖项)/,
+    activities: /(实践|社会实践|志愿|社团活动)/,
+    campus_roles: /(校内职务|学生工作|组织经历|社团任职)/,
+    skills: /(技能|证书|语言能力|培训经历|资格证)/,
+    family: /(家庭|家庭成员|家庭关系|社会关系)/
+  };
+  var COLLAPSED_TOGGLE_SELECTOR = [
+    '[aria-expanded="false"]',
+    '.ant-collapse-item:not(.ant-collapse-item-active) > .ant-collapse-header',
+    '.el-collapse-item:not(.is-active) .el-collapse-item__header',
+    '.ivu-collapse > .ivu-collapse-item:not(.ivu-collapse-item-active) > .ivu-collapse-header',
+    '.arco-collapse-item:not(.arco-collapse-item-active) .arco-collapse-item-header'
+  ].join(', ');
+  var REVEAL_BUTTON_SELECTOR = 'button, [role="button"], a, [class*="add"], [class*="btn"], [class*="button"], [class*="append"]';
+  function sectionFromText(text) {
+    var value = String(text == null ? '' : text);
+    var found = null;
+    Object.keys(SECTION_WORD_RES).forEach(function (key) { if (!found && SECTION_WORD_RES[key].test(value)) found = key; });
+    return found;
+  }
+  function classifyRevealTrigger(text) {
+    var value = String(text == null ? '' : text).trim();
+    return {
+      text: value,
+      add: ADD_WORD_RE.test(value),
+      deleteLike: REVEAL_DELETE_RE.test(value),
+      submitLike: SUBMIT_WORD_RE.test(value),
+      section: sectionFromText(value)
+    };
+  }
+  // A caption safe to treat as "add another row": it expresses adding, and is neither a delete nor a
+  // submit/save/next control. The section requirement is applied at the call site (a bare "添加" can
+  // still be bound to a section by its surrounding heading), so it is not demanded here.
+  function isAddRowTrigger(text) {
+    var info = classifyRevealTrigger(text);
+    return info.add && !info.deleteLike && !info.submitLike;
+  }
+  // Real form-submitting/resetting controls and navigation links only. A div/span with role="button"
+  // cannot submit a native form, and dispatchOpenSequence guards the form's submit event during the
+  // click, so those are allowed through where the stricter fill-path isClickHazard would reject them.
+  function isRevealHazard(element) {
+    if (!element || !element.closest) return false;
+    try { if (element.closest('a[href]')) return true; } catch (_) {}
+    var tag = String(element.tagName || '').toLowerCase();
+    var type = String(element.type || '').toLowerCase();
+    if (tag === 'button' || tag === 'input') {
+      if (type === 'submit' || type === 'reset' || type === 'image') return true;
+      if (tag === 'button' && type !== 'button' && element.closest('form')) return true;
+    }
+    return false;
+  }
+  function revealClickable(element) {
+    return Boolean(element) && isVisible(element) && !isRevealHazard(element) && !isSubmitLike(element);
+  }
+  // Not a field itself and not part of a select component — those also carry aria-expanded="false"
+  // when closed, and clicking one would only open a dropdown.
+  function isPanelToggle(element) {
+    if (!element || !element.matches) return false;
+    try { if (element.matches(CONTROL_SELECTOR)) return false; } catch (_) { return false; }
+    if (isCustomSelectControl(element)) return false;
+    var role = normalizeText(element.getAttribute && element.getAttribute('role'));
+    if (role === 'combobox' || role === 'listbox' || role === 'textbox' || role === 'searchbox') return false;
+    try { if (element.closest && element.closest('.ant-select, .el-select, .ivu-select, .n-select, .arco-select, .t-select, .semi-select, .phoenix-select, [role="combobox"]')) return false; } catch (_) {}
+    return true;
+  }
+  function countScannableControls() {
+    try { return allControls(scanRoots()).filter(isScannableControl).length; }
+    catch (_) { return 0; }
+  }
+  function collectAcross(selector) {
+    var found = [];
+    scanRoots().forEach(function (root) {
+      if (!root.querySelectorAll) return;
+      try {
+        Array.prototype.slice.call(root.querySelectorAll(selector)).forEach(function (el) {
+          if (found.indexOf(el) < 0) found.push(el);
+        });
+      } catch (_) {}
+    });
+    return found;
+  }
+  async function sleep(ms) { await waitFor(function () { return null; }, ms); }
+  async function expandCollapsedSections(budget) {
+    var clicked = 0;
+    var toggles = collectAcross(COLLAPSED_TOGGLE_SELECTOR).filter(isPanelToggle);
+    for (var i = 0; i < toggles.length && budget.clicks < MAX_REVEAL_CLICKS; i++) {
+      if (!revealClickable(toggles[i])) continue;
+      budget.clicks += 1;
+      clicked += 1;
+      dispatchOpenSequence(toggles[i]);
+      await sleep(REVEAL_SETTLE_MS);
+    }
+    return clicked;
+  }
+  async function revealRepeatedRows(profile, budget) {
+    var added = 0;
+    var buttons = collectAcross(REVEAL_BUTTON_SELECTOR);
+    for (var i = 0; i < buttons.length && budget.clicks < MAX_REVEAL_CLICKS; i++) {
+      var button = buttons[i];
+      var caption = cleanFieldLabel(textOf(button));
+      if (!isAddRowTrigger(caption) || !revealClickable(button)) continue;
+      var section = sectionFromText(caption);
+      if (!section) {
+        var contexts = ancestorContextLabels(button);
+        for (var h = 0; h < contexts.length && !section; h++) section = sectionFromText(contexts[h]);
+      }
+      if (!section) continue;
+      var records = Array.isArray(profile && profile[section]) ? profile[section].length : 0;
+      // One default row already covers a single record; only add for the extras.
+      if (records < 2) continue;
+      var want = Math.min(records - 1, MAX_ADD_CLICKS_PER_SECTION);
+      for (var c = 0; c < want && budget.clicks < MAX_REVEAL_CLICKS; c++) {
+        var before = countScannableControls();
+        budget.clicks += 1;
+        dispatchOpenSequence(button);
+        // Keep going only while a click actually produced new controls: a maxed-out or detached
+        // button then stops the loop instead of clicking into the void.
+        var grew = await waitFor(function () { return countScannableControls() > before ? true : null; }, REVEAL_SETTLE_MS);
+        if (!grew) break;
+        added += 1;
+      }
+    }
+    return added;
+  }
+  async function reveal(profile) {
+    if (typeof document === 'undefined') return { expanded: 0, added: 0, clicks: 0 };
+    var budget = { clicks: 0 };
+    var expanded = 0;
+    var added = 0;
+    try { expanded = await expandCollapsedSections(budget); } catch (_) {}
+    try { added = await revealRepeatedRows(profile || {}, budget); } catch (_) {}
+    // Adding a row can itself insert a collapsed sub-panel; one more expand pass catches it.
+    if (added && budget.clicks < MAX_REVEAL_CLICKS) {
+      try { expanded += await expandCollapsedSections(budget); } catch (_) {}
+    }
+    return { expanded: expanded, added: added, clicks: budget.clicks };
+  }
   function collectDraftValues(fields) { return (fields || []).filter(function (field) { return field && field.remember && !field.sensitive && field.siteKey && field.fingerprint && field.profileKey && field.proposedValue && !isPlaceholderValue(field.proposedValue); }).map(function (field) { return { site_key: field.siteKey, fingerprint: field.fingerprint, profile_key: field.profileKey, value: String(field.proposedValue) }; }); }
   function upsertDrafts(existing, updates, timestamp) {
     var drafts = (existing || []).map(function (item) { return Object.assign({}, item); });
@@ -2504,5 +2707,5 @@ function makeFingerprint(control, label) { control = controlIdentity(control); v
     }, 3000);
     return true;
   }
-  return { version: CONTENT_VERSION, normalizeText: normalizeText, controlSelector: controlSelector, isRendered: isRendered, nearbyChoiceText: nearbyChoiceText, labelVariants: labelVariants, withoutLeadingQualifier: withoutLeadingQualifier, isPlaceholderValue: isPlaceholderValue, buildLearnedMap: buildLearnedMap, findLearnedValue: findLearnedValue, leafProfileKey: leafProfileKey, learnedMatch: learnedMatch, fieldConfidence: fieldConfidence, labelMatchStrength: labelMatchStrength, profileLabelStrength: profileLabelStrength, matchChoiceIndexes: matchChoiceIndexes, choiceTokens: choiceTokens, booleanChoice: booleanChoice, choiceItems: choiceItems, choiceText: choiceText, scanRoots: scanRoots, searchRoots: searchRoots, allControls: allControls, adapterNames: adapterNames, registerAdapter: registerAdapter, controlIndex: controlIndex, isLiveControl: isLiveControl, deriveLabel: deriveLabel, flattenProfile: flattenProfile, matchSelectOption: matchSelectOption, matchDateSelectOption: matchDateSelectOption, matchChoice: matchChoice, isSubmitLike: isSubmitLike, isSensitiveField: isSensitiveField, isGenericPrompt: isGenericPrompt, cleanFieldLabel: cleanFieldLabel, isUsableFieldLabel: isUsableFieldLabel, shouldIncludeCandidate: shouldIncludeCandidate, customControlValue: customControlValue, readControlValue: readControlValue, isScannableControl: isScannableControl, isCustomSelectControl: isCustomSelectControl, isEditableControl: isEditableControl, isTextEntryControl: isTextEntryControl, readEditableText: readEditableText, isCustomChoiceGroup: isCustomChoiceGroup, customChoiceItems: customChoiceItems, customChoiceValue: customChoiceValue, customChoiceSelected: customChoiceSelected, previewCustomChoice: previewCustomChoice, isKnownPopupRoot: isKnownPopupRoot, panelRootFor: panelRootFor, findCascadeConfirm: findCascadeConfirm, customChoiceText: customChoiceText, customChoiceState: customChoiceState, fillCustomChoice: fillCustomChoice, isClickHazard: isClickHazard, dispatchOpenSequence: dispatchOpenSequence, valueParts: valueParts, regionKey: regionKey, matchCascadeOption: matchCascadeOption, findCustomOptions: findCustomOptions, combineContextLabel: combineContextLabel, findContainerLabel: findContainerLabel, preferredContainerSelectors: preferredContainerSelectors, isNavigationOnlyLabel: isNavigationOnlyLabel, isDateComponentLabel: isDateComponentLabel, dateComponentValue: dateComponentValue, dedupeControlDescriptors: dedupeControlDescriptors, dedupeFieldDescriptors: dedupeFieldDescriptors, valueMatchesLabel: valueMatchesLabel, setNativeValue: setNativeValue, makeFingerprint: makeFingerprint, siteMappingMatches: siteMappingMatches, collectDraftValues: collectDraftValues, upsertDrafts: upsertDrafts, draftIsStored: draftIsStored, writeDraft: writeDraft, scan: scan, fill: fill, rememberFields: rememberFields, startFormWatch: startFormWatch, stopFormWatch: stopFormWatch, watchStatus: watchStatus, getDiagnostics: function () { return Object.assign({}, lastScanDiagnostics); }, highlight: highlight, clearHighlight: clearHighlight };
+  return { version: CONTENT_VERSION, normalizeText: normalizeText, controlSelector: controlSelector, isRendered: isRendered, nearbyChoiceText: nearbyChoiceText, labelVariants: labelVariants, withoutLeadingQualifier: withoutLeadingQualifier, isPlaceholderValue: isPlaceholderValue, buildLearnedMap: buildLearnedMap, findLearnedValue: findLearnedValue, leafProfileKey: leafProfileKey, learnedMatch: learnedMatch, fieldConfidence: fieldConfidence, labelMatchStrength: labelMatchStrength, profileLabelStrength: profileLabelStrength, matchChoiceIndexes: matchChoiceIndexes, choiceTokens: choiceTokens, booleanChoice: booleanChoice, choiceItems: choiceItems, choiceText: choiceText, scanRoots: scanRoots, searchRoots: searchRoots, allControls: allControls, adapterNames: adapterNames, registerAdapter: registerAdapter, controlIndex: controlIndex, isLiveControl: isLiveControl, deriveLabel: deriveLabel, flattenProfile: flattenProfile, matchSelectOption: matchSelectOption, matchDateSelectOption: matchDateSelectOption, matchChoice: matchChoice, isSubmitLike: isSubmitLike, isSensitiveField: isSensitiveField, isGenericPrompt: isGenericPrompt, cleanFieldLabel: cleanFieldLabel, isUsableFieldLabel: isUsableFieldLabel, shouldIncludeCandidate: shouldIncludeCandidate, customControlValue: customControlValue, readControlValue: readControlValue, isScannableControl: isScannableControl, isCustomSelectControl: isCustomSelectControl, isEditableControl: isEditableControl, isTextEntryControl: isTextEntryControl, readEditableText: readEditableText, isCustomChoiceGroup: isCustomChoiceGroup, customChoiceItems: customChoiceItems, customChoiceValue: customChoiceValue, customChoiceSelected: customChoiceSelected, previewCustomChoice: previewCustomChoice, isKnownPopupRoot: isKnownPopupRoot, panelRootFor: panelRootFor, findCascadeConfirm: findCascadeConfirm, customChoiceText: customChoiceText, customChoiceState: customChoiceState, fillCustomChoice: fillCustomChoice, isClickHazard: isClickHazard, dispatchOpenSequence: dispatchOpenSequence, valueParts: valueParts, regionKey: regionKey, matchCascadeOption: matchCascadeOption, findCustomOptions: findCustomOptions, combineContextLabel: combineContextLabel, findContainerLabel: findContainerLabel, preferredContainerSelectors: preferredContainerSelectors, isNavigationOnlyLabel: isNavigationOnlyLabel, isDateComponentLabel: isDateComponentLabel, dateComponentValue: dateComponentValue, dedupeControlDescriptors: dedupeControlDescriptors, dedupeFieldDescriptors: dedupeFieldDescriptors, valueMatchesLabel: valueMatchesLabel, setNativeValue: setNativeValue, makeFingerprint: makeFingerprint, siteMappingMatches: siteMappingMatches, collectDraftValues: collectDraftValues, upsertDrafts: upsertDrafts, draftIsStored: draftIsStored, writeDraft: writeDraft, scan: scan, fill: fill, reveal: reveal, classifyRevealTrigger: classifyRevealTrigger, isAddRowTrigger: isAddRowTrigger, sectionFromText: sectionFromText, siblingOrCellLabel: siblingOrCellLabel, rememberFields: rememberFields, startFormWatch: startFormWatch, stopFormWatch: stopFormWatch, watchStatus: watchStatus, getDiagnostics: function () { return Object.assign({}, lastScanDiagnostics); }, highlight: highlight, clearHighlight: clearHighlight };
 }));
